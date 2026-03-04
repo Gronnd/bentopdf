@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { JSDOM } from 'jsdom';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,6 +22,14 @@ const KEY_MAPPING = {
   index: 'home',
   404: 'notFound',
 };
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 function loadAllTranslations() {
   const translations = {};
@@ -51,13 +58,75 @@ function buildUrl(langPrefix, pagePath) {
   return parts.filter(Boolean).join('/').replace(/\/+$/, '') || SITE_URL;
 }
 
-function processFileForLanguage(
-  originalContent,
-  file,
-  lang,
-  translations,
-  langDir
-) {
+function replaceMetaContent(html, selector, newContent) {
+  const escaped = escapeHtml(newContent);
+  if (selector.includes('property=')) {
+    const prop = selector.match(/property="([^"]+)"/)[1];
+    return html.replace(
+      new RegExp(
+        `(<meta\\s[^>]*property="${prop}"[^>]*content=")([^"]*)(")`,
+        'i'
+      ),
+      `$1${escaped}$3`
+    );
+  }
+  if (selector.includes('name=')) {
+    const name = selector.match(/name="([^"]+)"/)[1];
+    return html.replace(
+      new RegExp(
+        `(<meta\\s[^>]*name="${name}"[^>]*content=")([^"]*)(")`,
+        'i'
+      ),
+      `$1${escaped}$3`
+    );
+  }
+  return html;
+}
+
+function buildAlternateLinks(pagePath) {
+  let links = '';
+  for (const l of languages) {
+    const href = buildUrl(l === 'en' ? '' : l, pagePath);
+    links += `<link rel="alternate" hreflang="${l}" href="${href}">`;
+  }
+  links += `<link rel="alternate" hreflang="x-default" href="${buildUrl('', pagePath)}">`;
+  return links;
+}
+
+const langPrefixRegex = new RegExp(
+  `^(${BASE_PATH.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})?/(${languages.join('|')})(/|$)`
+);
+
+function rewriteInternalLinks(html, lang) {
+  return html.replace(/<a\s([^>]*href=")([^"]*)(")([^>]*>)/gi, (match, pre, href, post, rest) => {
+    if (
+      href.startsWith('http') ||
+      href.startsWith('//') ||
+      href.startsWith('#') ||
+      href.startsWith('mailto:') ||
+      href.startsWith('tel:') ||
+      href.startsWith('javascript:')
+    ) {
+      return match;
+    }
+    if (href.startsWith('/assets/') || href.includes('/assets/')) return match;
+    if (langPrefixRegex.test(href)) return match;
+
+    let newHref;
+    if (href.startsWith('/')) {
+      const pathWithoutBase = href.startsWith(BASE_PATH)
+        ? href.slice(BASE_PATH.length)
+        : href;
+      newHref = `${BASE_PATH}/${lang}${pathWithoutBase}`;
+    } else {
+      newHref = `${BASE_PATH}/${lang}/${href}`;
+    }
+
+    return `<a ${pre}${newHref}${post}${rest}`;
+  });
+}
+
+function processFileForLanguage(originalContent, file, lang, translations, langDir) {
   const filenameNoExt = file.replace('.html', '');
   let translationKey = toCamelCase(filenameNoExt);
   if (KEY_MAPPING[filenameNoExt]) {
@@ -65,11 +134,14 @@ function processFileForLanguage(
   }
 
   const { tools } = translations[lang];
-  const dom = new JSDOM(originalContent);
-  const document = dom.window.document;
+  let html = originalContent;
 
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  // Set lang and dir on <html>
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+  html = html.replace(/<html([^>]*)>/i, (match, attrs) => {
+    attrs = attrs.replace(/\s+lang="[^"]*"/, '').replace(/\s+dir="[^"]*"/, '');
+    return `<html${attrs} lang="${lang}" dir="${dir}">`;
+  });
 
   let title = null;
   let description = null;
@@ -84,139 +156,70 @@ function processFileForLanguage(
   }
 
   if (title) {
-    document.title = title;
-    const metaTitle = document.querySelector('meta[property="og:title"]');
-    if (metaTitle) metaTitle.content = title;
-    const metaTwitterTitle = document.querySelector(
-      'meta[name="twitter:title"]'
+    html = html.replace(
+      /<title>[^<]*<\/title>/i,
+      `<title>${escapeHtml(title)}</title>`
     );
-    if (metaTwitterTitle) metaTwitterTitle.content = title;
+    html = replaceMetaContent(html, 'property="og:title"', title);
+    html = replaceMetaContent(html, 'name="twitter:title"', title);
   }
 
   if (description) {
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) metaDesc.content = description;
-    const metaOgDesc = document.querySelector(
-      'meta[property="og:description"]'
-    );
-    if (metaOgDesc) metaOgDesc.content = description;
-    const metaTwitterDesc = document.querySelector(
-      'meta[name="twitter:description"]'
-    );
-    if (metaTwitterDesc) metaTwitterDesc.content = description;
+    html = replaceMetaContent(html, 'name="description"', description);
+    html = replaceMetaContent(html, 'property="og:description"', description);
+    html = replaceMetaContent(html, 'name="twitter:description"', description);
   }
 
-  document
-    .querySelectorAll('link[rel="alternate"][hreflang]')
-    .forEach((el) => el.remove());
+  // Remove existing alternate/hreflang links
+  html = html.replace(/<link\s[^>]*rel="alternate"[^>]*hreflang="[^"]*"[^>]*>\s*/gi, '');
 
   const pagePath = filenameNoExt === 'index' ? '' : filenameNoExt;
 
-  languages.forEach((l) => {
-    const link = document.createElement('link');
-    link.rel = 'alternate';
-    link.hreflang = l;
-    link.href = buildUrl(l === 'en' ? '' : l, pagePath);
-    document.head.appendChild(link);
-  });
+  // Add alternate links + canonical
+  const alternateLinks = buildAlternateLinks(pagePath);
+  const canonicalHref = buildUrl(lang, pagePath);
+  const canonicalTag = `<link rel="canonical" href="${canonicalHref}">`;
 
-  const defaultLink = document.createElement('link');
-  defaultLink.rel = 'alternate';
-  defaultLink.hreflang = 'x-default';
-  defaultLink.href = buildUrl('', pagePath);
-  document.head.appendChild(defaultLink);
-
-  let canonical = document.querySelector('link[rel="canonical"]');
-  if (!canonical) {
-    canonical = document.createElement('link');
-    canonical.rel = 'canonical';
-    document.head.appendChild(canonical);
+  // Replace existing canonical or add one
+  if (/<link\s[^>]*rel="canonical"[^>]*>/i.test(html)) {
+    html = html.replace(/<link\s[^>]*rel="canonical"[^>]*>/i, canonicalTag);
+  } else {
+    html = html.replace('</head>', `${canonicalTag}\n</head>`);
   }
-  canonical.href = buildUrl(lang, pagePath);
 
-  const links = document.querySelectorAll('a[href]');
-  links.forEach((link) => {
-    const href = link.getAttribute('href');
-    if (!href) return;
+  // Insert alternate links before </head>
+  html = html.replace('</head>', `${alternateLinks}\n</head>`);
 
-    if (
-      href.startsWith('http') ||
-      href.startsWith('//') ||
-      href.startsWith('#') ||
-      href.startsWith('mailto:') ||
-      href.startsWith('tel:') ||
-      href.startsWith('javascript:')
-    ) {
-      return;
-    }
+  // Rewrite internal links
+  html = rewriteInternalLinks(html, lang);
 
-    if (href.startsWith('/assets/') || href.includes('/assets/')) return;
-
-    const langPrefixRegex = new RegExp(
-      `^(${BASE_PATH})?/(${languages.join('|')})(/|$)`
-    );
-    if (langPrefixRegex.test(href)) return;
-
-    let newHref;
-    if (href.startsWith('/')) {
-      const pathWithoutBase = href.startsWith(BASE_PATH)
-        ? href.slice(BASE_PATH.length)
-        : href;
-      newHref = `${BASE_PATH}/${lang}${pathWithoutBase}`;
-    } else {
-      newHref = `${BASE_PATH}/${lang}/${href}`;
-    }
-
-    link.setAttribute('href', newHref);
-  });
-
-  const result = dom.serialize();
-
-  dom.window.close();
-
-  fs.writeFileSync(path.join(langDir, file), result);
+  fs.writeFileSync(path.join(langDir, file), html);
 }
 
 function updateEnglishFile(filePath, originalContent) {
   const filenameNoExt = path.basename(filePath, '.html');
-  const dom = new JSDOM(originalContent);
-  const document = dom.window.document;
+  let html = originalContent;
 
-  document
-    .querySelectorAll('link[rel="alternate"][hreflang]')
-    .forEach((el) => el.remove());
+  // Remove existing alternate/hreflang links
+  html = html.replace(/<link\s[^>]*rel="alternate"[^>]*hreflang="[^"]*"[^>]*>\s*/gi, '');
 
   const pagePath = filenameNoExt === 'index' ? '' : filenameNoExt;
+  const alternateLinks = buildAlternateLinks(pagePath);
 
-  languages.forEach((l) => {
-    const link = document.createElement('link');
-    link.rel = 'alternate';
-    link.hreflang = l;
-    link.href = buildUrl(l === 'en' ? '' : l, pagePath);
-    document.head.appendChild(link);
-  });
+  // Insert alternate links before </head>
+  html = html.replace('</head>', `${alternateLinks}\n</head>`);
 
-  const defaultLink = document.createElement('link');
-  defaultLink.rel = 'alternate';
-  defaultLink.hreflang = 'x-default';
-  defaultLink.href = buildUrl('', pagePath);
-  document.head.appendChild(defaultLink);
-
-  const result = dom.serialize();
-
-  dom.window.close();
-
-  fs.writeFileSync(filePath, result);
+  fs.writeFileSync(filePath, html);
 }
 
 async function generateI18nPages() {
-  console.log('🌍 Generating i18n pages...');
+  console.log('Generating i18n pages...');
   console.log(`   SITE_URL: ${SITE_URL}`);
   console.log(`   BASE_PATH: ${BASE_PATH || '/'}`);
   console.log(`   Languages: ${languages.length} (${languages.join(', ')})`);
 
   if (!fs.existsSync(DIST_DIR)) {
-    console.error('❌ dist directory not found. Please run build first.');
+    console.error('dist directory not found. Please run build first.');
     process.exit(1);
   }
 
@@ -258,7 +261,7 @@ async function generateI18nPages() {
       );
 
       processed++;
-      if (processed % 10 === 0 || processed === total) {
+      if (processed % 100 === 0 || processed === total) {
         console.log(`   Progress: ${processed}/${total} pages`);
       }
     }
@@ -266,10 +269,10 @@ async function generateI18nPages() {
     updateEnglishFile(filePath, originalContent);
   }
 
-  console.log('✅ i18n pages generated successfully!');
+  console.log('i18n pages generated successfully!');
 }
 
 generateI18nPages().catch((err) => {
-  console.error('❌ i18n page generation failed:', err);
+  console.error('i18n page generation failed:', err);
   process.exit(1);
 });
