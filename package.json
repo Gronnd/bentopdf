@@ -86,7 +86,7 @@
     "blob-stream": "^0.1.3",
     "bwip-js": "^4.8.0",
     "cropperjs": "^1.6.2",
-    "embedpdf-snippet": "file:vendor/embedpdf/embedpdf-snippet-2.3.0.tgz",
+    "embedpdf-snippet": "file:vendor/embedpdf/embedpdf-snippet-2.14.3.tgz",
     "heic2any": "^0.0.4",
     "highlight.js": "^11.11.1",
     "html2canvas": "^1.4.1",
