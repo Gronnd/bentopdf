@@ -5,6 +5,7 @@ import type { SocketData } from '../types';
 import { requirePdfInput, extractAllPdfs } from '../types';
 import { downloadFile } from '../../utils/helpers.js';
 import { loadPyMuPDF } from '../../utils/pymupdf-loader.js';
+import { wfError } from '../errors';
 
 export class PdfToXlsxNode extends BaseWorkflowNode {
   readonly category = 'Output' as const;
@@ -36,7 +37,7 @@ export class PdfToXlsxNode extends BaseWorkflowNode {
       for (let i = 0; i < pageCount; i++) {
         const page = doc.getPage(i);
         const tables = page.findTables();
-        tables.forEach((table: any) => {
+        tables.forEach((table: { rows: (string | null)[][] }) => {
           allTables.push({ page: i + 1, rows: table.rows });
         });
       }
@@ -45,7 +46,7 @@ export class PdfToXlsxNode extends BaseWorkflowNode {
     }
 
     if (allTables.length === 0) {
-      throw new Error(`No tables found in ${filename}`);
+      throw new Error(wfError('pdfToXlsxNoTables', { file: filename }));
     }
 
     const XLSX = await import('xlsx');

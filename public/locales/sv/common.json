@@ -5,8 +5,11 @@
     "contact": "Kontakt",
     "licensing": "Licensiering",
     "allTools": "Alla verktyg",
+    "docs": "Docs",
     "openMainMenu": "Öppna huvudmenyn",
-    "language": "Språk"
+    "language": "Språk",
+    "searchLanguage": "Sök språk…",
+    "noLanguagesFound": "Inga språk hittades"
   },
   "donation": {
     "message": "Gillar du BentoPDF? Hjälp oss att hålla det gratis och öppen källkod!",
@@ -97,8 +100,11 @@
   },
   "howItWorks": {
     "title": "Så här fungerar det",
+    "step1Title": "Ladda upp fil",
     "step1": "Klicka eller dra och släpp din fil för att börja",
+    "step2Title": "Bearbeta",
     "step2": "Klicka på bearbeta-knappen för att starta",
+    "step3Title": "Ladda ner",
     "step3": "Spara din bearbetade fil direkt"
   },
   "relatedTools": {
@@ -129,6 +135,10 @@
     "resetToDefaults": "Återställ till standard",
     "fullWidthMode": "Fullbreddsläge",
     "fullWidthDescription": "Använd hela skärmbredden för alla verktyg istället för en centrerad behållare",
+    "compactMode": "Kompakt läge",
+    "compactModeDescription": "Visa verktyg som kompakt lista istället för kort",
+    "advancedSettings": "Avancerade inställningar",
+    "advancedSettingsDescription": "Konfigurera externa behandlingsmoduler (PyMuPDF, Ghostscript, CoherentPDF)",
     "settingsAutoSaved": "Inställningar sparas automatiskt",
     "clickToSet": "Klicka för att ställa in",
     "pressKeys": "Tryck tangenter...",
@@ -206,7 +216,7 @@
     },
     "analytics": {
       "question": "Använder ni cookies eller analys för att spåra mig?",
-      "answer": "Vi bryr oss om din integritet. BentoPDF spårar inte personlig information. Vi använder Simple Analytics enbart för att se anonyma besöksantal. Det betyder att vi kan se hur många användare som besöker vår site, men vi vet aldrig vem du är. Simple Analytics är fullt GDPR-kompatibelt och respekterar din integritet."
+      "answer": "Nej. BentoPDF spårar dig inte alls. Vi använder inga cookies, ingen analys och inga spårningsskript, inte ens på den publika webbplatsen bentopdf.com. Vi vet aldrig vem du är eller vad du gör med verktygen."
     }
   },
   "testimonials": {
@@ -229,7 +239,9 @@
     "legal": "Juridiskt",
     "termsAndConditions": "Villkor",
     "privacyPolicy": "Integritetspolicy",
-    "followUs": "Följ oss"
+    "followUs": "Följ oss",
+    "privacyShort": "Integritet",
+    "termsShort": "Villkor"
   },
   "merge": {
     "title": "Sammanfoga PDF:er",
@@ -260,11 +272,14 @@
     "add": "Lägg till",
     "remove": "Ta bort",
     "loading": "Laddar...",
+    "loadingPageCount": "Laddar sidor...",
     "error": "Fel",
     "success": "Klart",
     "file": "Fil",
     "files": "Filer",
-    "close": "Stäng"
+    "close": "Stäng",
+    "convert": "Konvertera",
+    "unknownError": "Okänt fel"
   },
   "about": {
     "hero": {
@@ -273,7 +288,8 @@
       "noCompromises": "Inga kompromisser."
     },
     "mission": {
-      "title": "Vårt uppdrag",
+      "title": "Vårt",
+      "titleDim": "uppdrag",
       "description": "Att tillhandahålla den mest omfattande PDF-verktygslådan som respekterar din integritet och aldrig ber om betalning. Vi tycker att viktiga dokumentverktyg ska vara tillgängliga för alla, överallt, utan hinder."
     },
     "philosophy": {
@@ -302,7 +318,7 @@
     },
     "cta": {
       "title": "Redo att komma igång?",
-      "description": "Gå med i tusentals användare som litar på Bentopdf för sina dagliga dokumentbehov. Upplev skillnaden som integritet och prestanda kan göra.",
+      "description": "Gå med i tusentals användare som litar på BentoPDF för sina dagliga dokumentbehov. Upplev skillnaden som integritet och prestanda kan göra.",
       "button": "Utforska alla verktyg"
     }
   },
@@ -337,9 +353,12 @@
     "download": "Ladda ner:",
     "downloadSelected": "Ladda ner markerade",
     "exportPdf": "Exportera PDF",
-    "uploadPdfFiles": "Välj PDF-filer",
-    "dragAndDrop": "Dra och släpp PDF-filer här, eller klicka för att välja",
+    "uploadPdfFiles": "Välj PDF- eller bildfiler",
+    "dragAndDrop": "Dra och släpp PDF- eller bildfiler här, eller klicka för att välja",
     "selectFiles": "Välj filer",
+    "dropToAdd": "Släpp PDF- eller bildfiler för att lägga till",
+    "convertingImages": "Konverterar bilder till PDF...",
+    "failedToConvertImages": "Kunde inte konvertera bilder till PDF.",
     "renderingPages": "Renderar sidor...",
     "actions": {
       "duplicatePage": "Duplicera denna sida",
@@ -361,5 +380,11 @@
   "simpleMode": {
     "title": "PDF-verktyg",
     "subtitle": "Välj ett verktyg för att komma igång"
+  },
+  "disabledTool": {
+    "title": "Verktyget är inte tillgängligt",
+    "heading": "Det här verktyget har inaktiverats",
+    "message": "Det här verktyget är inte tillgängligt i din installation. Kontakta din administratör för mer information.",
+    "backHome": "Tillbaka till startsidan"
   }
 }

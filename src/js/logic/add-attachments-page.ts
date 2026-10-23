@@ -2,12 +2,13 @@ import { AddAttachmentState } from '@/types';
 import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { downloadFile, formatBytes } from '../utils/helpers.js';
 import { createIcons, icons } from 'lucide';
-import { PDFDocument as PDFLibDocument } from 'pdf-lib';
 import { isCpdfAvailable } from '../utils/cpdf-helper.js';
 import {
   showWasmRequiredDialog,
   WasmProvider,
 } from '../utils/wasm-provider.js';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
+import { loadPdfDocument } from '../utils/load-pdf-document.js';
 
 const worker = new Worker(
   import.meta.env.BASE_URL + 'workers/add-attachments.worker.js'
@@ -64,11 +65,9 @@ worker.onmessage = function (e) {
   if (data.status === 'success' && data.modifiedPDF !== undefined) {
     hideLoader();
 
-    const originalName =
-      pageState.file?.name.replace(/\.pdf$/i, '') || 'document';
     downloadFile(
       new Blob([new Uint8Array(data.modifiedPDF)], { type: 'application/pdf' }),
-      `${originalName}_with_attachments.pdf`
+      pageState.file?.name || 'document.pdf'
     );
 
     showAlert(
@@ -129,13 +128,16 @@ async function updateUI() {
     createIcons({ icons });
 
     try {
+      const result = await loadPdfWithPasswordPrompt(pageState.file);
+      if (!result) {
+        resetState();
+        return;
+      }
+      result.pdf.destroy();
+      pageState.file = result.file;
       showLoader('Loading PDF...');
-      const arrayBuffer = await pageState.file.arrayBuffer();
 
-      pageState.pdfDoc = await PDFLibDocument.load(arrayBuffer, {
-        ignoreEncryption: true,
-        throwOnInvalidObject: false,
-      });
+      pageState.pdfDoc = await loadPdfDocument(result.bytes);
 
       const pageCount = pageState.pdfDoc.getPageCount();
       metaSpan.textContent = `${formatBytes(pageState.file.size)} • ${pageCount} pages`;
@@ -269,10 +271,13 @@ async function addAttachments() {
 
     const transferables = [pdfBuffer, ...attachmentBuffers];
     worker.postMessage(message, transferables);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error attaching files:', error);
     hideLoader();
-    showAlert('Error', `Failed to attach files: ${error.message}`);
+    showAlert(
+      'Error',
+      `Failed to attach files: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 

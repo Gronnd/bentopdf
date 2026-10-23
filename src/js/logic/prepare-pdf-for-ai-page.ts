@@ -1,4 +1,5 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
+import { t } from '../i18n/i18n';
 import {
   downloadFile,
   readFileAsArrayBuffer,
@@ -7,9 +8,10 @@ import {
 } from '../utils/helpers.js';
 import { state } from '../state.js';
 import { createIcons, icons } from 'lucide';
-import { isWasmAvailable, getWasmBaseUrl } from '../config/wasm-cdn-config.js';
-import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
-import { loadPyMuPDF, isPyMuPDFAvailable } from '../utils/pymupdf-loader.js';
+import { loadPyMuPDF } from '../utils/pymupdf-loader.js';
+import type { PyMuPDFInstance } from '@/types';
+import { batchDecryptIfNeeded } from '../utils/password-prompt.js';
+import { deduplicateFileName } from '../utils/deduplicate-filename.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
@@ -50,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const metaSpan = document.createElement('div');
         metaSpan.className = 'text-xs text-gray-400';
-        metaSpan.textContent = `${formatBytes(file.size)} • Loading pages...`;
+        metaSpan.textContent = `${formatBytes(file.size)} • ${t('common.loadingPageCount')}`;
 
         infoContainer.append(nameSpan, metaSpan);
 
@@ -104,6 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
       showLoader('Loading engine...');
       const pymupdf = await loadPyMuPDF();
 
+      hideLoader();
+      state.files = await batchDecryptIfNeeded(state.files);
+      showLoader('Extracting...');
+
       const total = state.files.length;
       let completed = 0;
       let failed = 0;
@@ -112,7 +118,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = state.files[0];
         showLoader(`Extracting ${file.name} for AI...`);
 
-        const llamaDocs = await (pymupdf as any).pdfToLlamaIndex(file);
+        const llamaDocs = await (pymupdf as PyMuPDFInstance).pdfToLlamaIndex(
+          file
+        );
         const outName = file.name.replace(/\.pdf$/i, '') + '_llm.json';
         const jsonContent = JSON.stringify(llamaDocs, null, 2);
         downloadFile(
@@ -128,24 +136,28 @@ document.addEventListener('DOMContentLoaded', () => {
           () => resetState()
         );
       } else {
-        // Multiple files - create ZIP
         const JSZip = (await import('jszip')).default;
         const zip = new JSZip();
+        const usedNames = new Set<string>();
 
-        for (const file of state.files) {
+        for (let fi = 0; fi < state.files.length; fi++) {
           try {
+            const file = state.files[fi];
             showLoader(
               `Extracting ${file.name} for AI (${completed + 1}/${total})...`
             );
 
-            const llamaDocs = await (pymupdf as any).pdfToLlamaIndex(file);
+            const llamaDocs = await (
+              pymupdf as PyMuPDFInstance
+            ).pdfToLlamaIndex(file);
             const outName = file.name.replace(/\.pdf$/i, '') + '_llm.json';
             const jsonContent = JSON.stringify(llamaDocs, null, 2);
-            zip.file(outName, jsonContent);
+            const zipEntryName = deduplicateFileName(outName, usedNames);
+            zip.file(zipEntryName, jsonContent);
 
             completed++;
           } catch (error) {
-            console.error(`Failed to extract ${file.name}:`, error);
+            console.error(`Failed to extract ${state.files[fi].name}:`, error);
             failed++;
           }
         }
@@ -173,11 +185,11 @@ document.addEventListener('DOMContentLoaded', () => {
           );
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       hideLoader();
       showAlert(
         'Error',
-        `An error occurred during extraction. Error: ${e.message}`
+        `An error occurred during extraction. Error: ${e instanceof Error ? e.message : String(e)}`
       );
     }
   };

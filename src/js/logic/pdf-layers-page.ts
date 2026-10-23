@@ -1,14 +1,15 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
+import { t } from '../i18n/i18n';
 import {
   downloadFile,
+  escapeHtml,
   readFileAsArrayBuffer,
   formatBytes,
   getPDFDocument,
 } from '../utils/helpers.js';
 import { createIcons, icons } from 'lucide';
-import { isWasmAvailable, getWasmBaseUrl } from '../config/wasm-cdn-config.js';
-import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
-import { loadPyMuPDF, isPyMuPDFAvailable } from '../utils/pymupdf-loader.js';
+import { loadPyMuPDF } from '../utils/pymupdf-loader.js';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
 
 interface LayerData {
   number: number;
@@ -22,7 +23,21 @@ interface LayerData {
 }
 
 let currentFile: File | null = null;
-let currentDoc: any = null;
+interface PyMuPDFDocument {
+  getLayerConfig: () => LayerData[];
+  addLayer: (name: string) => { number: number; xref: number };
+  setLayerConfig: (layers: LayerData[]) => void;
+  setLayerVisibility: (xref: number, visible: boolean) => void;
+  deleteOCG: (xref: number) => void;
+  addOCGWithParent: (
+    name: string,
+    parentXref: number
+  ) => { number: number; xref: number };
+  addOCG: (name: string) => { number: number; xref: number };
+  save: () => Uint8Array;
+}
+
+let currentDoc: PyMuPDFDocument | null = null;
 const layersMap = new Map<number, LayerData>();
 let nextDisplayOrder = 0;
 
@@ -60,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const metaSpan = document.createElement('div');
       metaSpan.className = 'text-xs text-gray-400';
-      metaSpan.textContent = `${formatBytes(currentFile.size)} • Loading pages...`;
+      metaSpan.textContent = `${formatBytes(currentFile.size)} • ${t('common.loadingPageCount')}`;
 
       infoContainer.append(nameSpan, metaSpan);
 
@@ -194,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="layer-item" data-number="${layer.number}" style="padding-left: ${layer.depth * 24 + 8}px;">
                 <label class="layer-toggle">
                     <input type="checkbox" ${layer.on ? 'checked' : ''} ${layer.locked ? 'disabled' : ''} data-xref="${layer.xref}" />
-                    <span class="layer-name">${layer.depth > 0 ? '└ ' : ''}${layer.text || `Layer ${layer.number}`}</span>
+                    <span class="layer-name">${layer.depth > 0 ? '└ ' : ''}${escapeHtml(layer.text || `Layer ${layer.number}`)}</span>
                     ${layer.locked ? '<span class="layer-locked">🔒</span>' : ''}
                 </label>
                 <div class="layer-actions">
@@ -272,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!childName || !childName.trim()) return;
 
         try {
-          const childXref = currentDoc.addOCGWithParent(
+          const childResult = currentDoc.addOCGWithParent(
             childName.trim(),
             parentXref
           );
@@ -283,9 +298,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
 
-          layersMap.set(childXref, {
-            number: childXref,
-            xref: childXref,
+          layersMap.set(childResult.xref, {
+            number: childResult.number,
+            xref: childResult.xref,
             text: childName.trim(),
             on: true,
             locked: false,
@@ -314,16 +329,17 @@ document.addEventListener('DOMContentLoaded', () => {
       const pymupdf = await loadPyMuPDF();
 
       showLoader(`Loading layers from ${currentFile.name}...`);
-      currentDoc = await pymupdf.open(currentFile);
+      currentDoc = await (
+        pymupdf as { open: (file: File) => Promise<PyMuPDFDocument> }
+      ).open(currentFile);
 
       showLoader('Reading layer configuration...');
       const existingLayers = currentDoc.getLayerConfig();
 
-      // Reset and populate layers map
       layersMap.clear();
       nextDisplayOrder = 0;
 
-      existingLayers.forEach((layer: any) => {
+      existingLayers.forEach((layer: LayerData) => {
         layersMap.set(layer.number, {
           number: layer.number,
           xref: layer.xref ?? layer.number,
@@ -348,9 +364,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       renderLayers();
       setupLayerHandlers();
-    } catch (error: any) {
+    } catch (error: unknown) {
       hideLoader();
-      showAlert('Error', error.message || 'Failed to load PDF layers');
+      showAlert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to load PDF layers'
+      );
       console.error('Layers error:', error);
     }
   };
@@ -371,13 +390,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-          const xref = currentDoc.addOCG(name);
+          const layerResult = currentDoc.addOCG(name);
           newLayerInput.value = '';
 
           const newDisplayOrder = nextDisplayOrder++;
-          layersMap.set(xref, {
-            number: xref,
-            xref: xref,
+          layersMap.set(layerResult.xref, {
+            number: layerResult.number,
+            xref: layerResult.xref,
             text: name,
             on: true,
             locked: false,
@@ -387,8 +406,12 @@ document.addEventListener('DOMContentLoaded', () => {
           });
 
           renderLayers();
-        } catch (err: any) {
-          showAlert('Error', 'Failed to add layer: ' + err.message);
+        } catch (err: unknown) {
+          showAlert(
+            'Error',
+            'Failed to add layer: ' +
+              (err instanceof Error ? err.message : String(err))
+          );
         }
       };
     }
@@ -401,28 +424,33 @@ document.addEventListener('DOMContentLoaded', () => {
           const blob = new Blob([new Uint8Array(pdfBytes)], {
             type: 'application/pdf',
           });
-          const outName =
-            currentFile!.name.replace(/\.pdf$/i, '') + '_layers.pdf';
-          downloadFile(blob, outName);
+          downloadFile(blob, currentFile!.name);
           hideLoader();
           resetState();
           showAlert('Success', 'PDF with layer changes saved!', 'success');
-        } catch (err: any) {
+        } catch (err: unknown) {
           hideLoader();
-          showAlert('Error', 'Failed to save PDF: ' + err.message);
+          showAlert(
+            'Error',
+            'Failed to save PDF: ' +
+              (err instanceof Error ? err.message : String(err))
+          );
         }
       };
     }
   };
 
-  const handleFileSelect = (files: FileList | null) => {
+  const handleFileSelect = async (files: FileList | null) => {
     if (files && files.length > 0) {
       const file = files[0];
       if (
         file.type === 'application/pdf' ||
         file.name.toLowerCase().endsWith('.pdf')
       ) {
-        currentFile = file;
+        const result = await loadPdfWithPasswordPrompt(file);
+        if (!result) return;
+        result.pdf.destroy();
+        currentFile = result.file;
         updateUI();
       } else {
         showAlert('Invalid File', 'Please select a PDF file.');

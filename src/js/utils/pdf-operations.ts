@@ -1,11 +1,12 @@
-import { PDFDocument, degrees, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, degrees, rgb, StandardFonts, PageSizes } from 'pdf-lib';
+import { loadPdfDocument } from './load-pdf-document.js';
 
 export async function mergePdfs(
   pdfBytesList: Uint8Array[]
 ): Promise<Uint8Array> {
   const mergedDoc = await PDFDocument.create();
   for (const bytes of pdfBytesList) {
-    const srcDoc = await PDFDocument.load(bytes);
+    const srcDoc = await loadPdfDocument(bytes);
     const copiedPages = await mergedDoc.copyPages(
       srcDoc,
       srcDoc.getPageIndices()
@@ -19,7 +20,7 @@ export async function splitPdf(
   pdfBytes: Uint8Array,
   pageIndices: number[]
 ): Promise<Uint8Array> {
-  const srcDoc = await PDFDocument.load(pdfBytes);
+  const srcDoc = await loadPdfDocument(pdfBytes);
   const newPdf = await PDFDocument.create();
   const copiedPages = await newPdf.copyPages(srcDoc, pageIndices);
   copiedPages.forEach((page) => newPdf.addPage(page));
@@ -30,7 +31,7 @@ export async function rotatePdfUniform(
   pdfBytes: Uint8Array,
   angle: number
 ): Promise<Uint8Array> {
-  const srcDoc = await PDFDocument.load(pdfBytes);
+  const srcDoc = await loadPdfDocument(pdfBytes);
   const newPdfDoc = await PDFDocument.create();
   const pageCount = srcDoc.getPageCount();
 
@@ -75,7 +76,7 @@ export async function rotatePdfPages(
   pdfBytes: Uint8Array,
   rotations: number[]
 ): Promise<Uint8Array> {
-  const srcDoc = await PDFDocument.load(pdfBytes);
+  const srcDoc = await loadPdfDocument(pdfBytes);
   const newPdfDoc = await PDFDocument.create();
   const pageCount = srcDoc.getPageCount();
 
@@ -121,7 +122,7 @@ export async function deletePdfPages(
   pdfBytes: Uint8Array,
   pagesToDelete: Set<number>
 ): Promise<Uint8Array> {
-  const srcDoc = await PDFDocument.load(pdfBytes);
+  const srcDoc = await loadPdfDocument(pdfBytes);
   const totalPages = srcDoc.getPageCount();
 
   const pagesToKeep: number[] = [];
@@ -181,6 +182,82 @@ export function parseDeletePages(str: string, totalPages: number): Set<number> {
   return pages;
 }
 
+export interface TileLayoutOptions {
+  pageWidth: number;
+  pageHeight: number;
+  itemWidth: number;
+  itemHeight: number;
+  angle: number;
+  gapX: number;
+  gapY: number;
+}
+
+export const DEFAULT_TILE_GAP_X = 0.25;
+export const DEFAULT_TILE_GAP_Y = 0.75;
+const MAX_TILES = 1500;
+
+export function computeTileCenters(
+  options: TileLayoutOptions
+): { x: number; y: number }[] {
+  const { pageWidth, pageHeight, itemWidth, itemHeight } = options;
+  if (
+    !(pageWidth > 0) ||
+    !(pageHeight > 0) ||
+    !(itemWidth > 0) ||
+    !(itemHeight > 0) ||
+    !Number.isFinite(options.angle)
+  ) {
+    return [];
+  }
+
+  const rad = (options.angle * Math.PI) / 180;
+  const ux = Math.cos(rad);
+  const uy = Math.sin(rad);
+  const vx = -Math.sin(rad);
+  const vy = Math.cos(rad);
+
+  let stepX = Math.max(itemWidth * (1 + Math.max(0, options.gapX)), 1);
+  let stepY = Math.max(itemHeight * (1 + Math.max(0, options.gapY)), 1);
+
+  const density = (pageWidth * pageHeight) / (stepX * stepY);
+  if (density > MAX_TILES) {
+    const factor = Math.sqrt(density / MAX_TILES);
+    stepX *= factor;
+    stepY *= factor;
+  }
+
+  const centerX = pageWidth / 2;
+  const centerY = pageHeight / 2;
+  const reach = Math.hypot(pageWidth, pageHeight) / 2;
+  const radius = Math.hypot(itemWidth, itemHeight) / 2;
+  const halfExtentX =
+    (Math.abs(ux) * itemWidth + Math.abs(vx) * itemHeight) / 2;
+  const halfExtentY =
+    (Math.abs(uy) * itemWidth + Math.abs(vy) * itemHeight) / 2;
+  const iMax = Math.ceil((reach + radius) / stepX);
+  const jMax = Math.ceil((reach + radius) / stepY);
+
+  const centers: { x: number; y: number }[] = [];
+  for (let j = -jMax; j <= jMax; j++) {
+    for (let i = -iMax; i <= iMax; i++) {
+      const x = centerX + i * stepX * ux + j * stepY * vx;
+      const y = centerY + i * stepX * uy + j * stepY * vy;
+      if (
+        x + halfExtentX < 0 ||
+        x - halfExtentX > pageWidth ||
+        y + halfExtentY < 0 ||
+        y - halfExtentY > pageHeight
+      ) {
+        continue;
+      }
+      centers.push({ x, y });
+      if (centers.length >= MAX_TILES * 2) return centers;
+    }
+  }
+
+  return centers;
+}
+
 export interface TextWatermarkOptions {
   text: string;
   fontSize: number;
@@ -190,13 +267,16 @@ export interface TextWatermarkOptions {
   x?: number;
   y?: number;
   pageIndices?: number[];
+  tile?: boolean;
+  tileGapX?: number;
+  tileGapY?: number;
 }
 
 export async function addTextWatermark(
   pdfBytes: Uint8Array,
   options: TextWatermarkOptions
 ): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const pdfDoc = await loadPdfDocument(pdfBytes);
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -243,17 +323,28 @@ export async function addTextWatermark(
     const page = pages[idx];
     if (!page) continue;
     const { width, height } = page.getSize();
-    const cx = posX * width;
-    const cy = posY * height;
+    const centers = options.tile
+      ? computeTileCenters({
+          pageWidth: width,
+          pageHeight: height,
+          itemWidth: imgWidth,
+          itemHeight: imgHeight,
+          angle: options.angle,
+          gapX: options.tileGapX ?? DEFAULT_TILE_GAP_X,
+          gapY: options.tileGapY ?? DEFAULT_TILE_GAP_Y,
+        })
+      : [{ x: posX * width, y: posY * height }];
 
-    page.drawImage(image, {
-      x: cx - Math.cos(rad) * halfW + Math.sin(rad) * halfH,
-      y: cy - Math.sin(rad) * halfW - Math.cos(rad) * halfH,
-      width: imgWidth,
-      height: imgHeight,
-      opacity: options.opacity,
-      rotate: degrees(options.angle),
-    });
+    for (const { x: cx, y: cy } of centers) {
+      page.drawImage(image, {
+        x: cx - Math.cos(rad) * halfW + Math.sin(rad) * halfH,
+        y: cy - Math.sin(rad) * halfW - Math.cos(rad) * halfH,
+        width: imgWidth,
+        height: imgHeight,
+        opacity: options.opacity,
+        rotate: degrees(options.angle),
+      });
+    }
   }
 
   return new Uint8Array(await pdfDoc.save());
@@ -268,13 +359,16 @@ export interface ImageWatermarkOptions {
   x?: number;
   y?: number;
   pageIndices?: number[];
+  tile?: boolean;
+  tileGapX?: number;
+  tileGapY?: number;
 }
 
 export async function addImageWatermark(
   pdfBytes: Uint8Array,
   options: ImageWatermarkOptions
 ): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const pdfDoc = await loadPdfDocument(pdfBytes);
   const image =
     options.imageType === 'png'
       ? await pdfDoc.embedPng(options.imageBytes)
@@ -294,17 +388,28 @@ export async function addImageWatermark(
     const page = pages[idx];
     if (!page) continue;
     const { width, height } = page.getSize();
-    const cx = posX * width;
-    const cy = posY * height;
+    const centers = options.tile
+      ? computeTileCenters({
+          pageWidth: width,
+          pageHeight: height,
+          itemWidth: imgWidth,
+          itemHeight: imgHeight,
+          angle: options.angle,
+          gapX: options.tileGapX ?? DEFAULT_TILE_GAP_X,
+          gapY: options.tileGapY ?? DEFAULT_TILE_GAP_Y,
+        })
+      : [{ x: posX * width, y: posY * height }];
 
-    page.drawImage(image, {
-      x: cx - Math.cos(rad) * halfW + Math.sin(rad) * halfH,
-      y: cy - Math.sin(rad) * halfW - Math.cos(rad) * halfH,
-      width: imgWidth,
-      height: imgHeight,
-      opacity: options.opacity,
-      rotate: degrees(options.angle),
-    });
+    for (const { x: cx, y: cy } of centers) {
+      page.drawImage(image, {
+        x: cx - Math.cos(rad) * halfW + Math.sin(rad) * halfH,
+        y: cy - Math.sin(rad) * halfW - Math.cos(rad) * halfH,
+        width: imgWidth,
+        height: imgHeight,
+        opacity: options.opacity,
+        rotate: degrees(options.angle),
+      });
+    }
   }
 
   return new Uint8Array(await pdfDoc.save());
@@ -330,7 +435,7 @@ export async function addPageNumbers(
   pdfBytes: Uint8Array,
   options: PageNumberOptions
 ): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const pdfDoc = await loadPdfDocument(pdfBytes);
   const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const pages = pdfDoc.getPages();
   const totalPages = pages.length;
@@ -437,4 +542,102 @@ export async function addPageNumbers(
   }
 
   return new Uint8Array(await pdfDoc.save());
+}
+
+export interface FixPageSizeOptions {
+  targetSize: string;
+  orientation: string;
+  scalingMode: string;
+  backgroundColor: { r: number; g: number; b: number };
+  customWidth?: number;
+  customHeight?: number;
+  customUnits?: string;
+}
+
+export async function fixPageSize(
+  pdfBytes: Uint8Array,
+  options: FixPageSizeOptions
+): Promise<Uint8Array> {
+  let targetWidth: number;
+  let targetHeight: number;
+
+  if (options.targetSize.toLowerCase() === 'custom') {
+    const w = options.customWidth ?? 210;
+    const h = options.customHeight ?? 297;
+    const units = (options.customUnits ?? 'mm').toLowerCase();
+    if (units === 'in') {
+      targetWidth = w * 72;
+      targetHeight = h * 72;
+    } else {
+      targetWidth = w * (72 / 25.4);
+      targetHeight = h * (72 / 25.4);
+    }
+  } else {
+    const selected =
+      PageSizes[options.targetSize as keyof typeof PageSizes] || PageSizes.A4;
+    targetWidth = selected[0];
+    targetHeight = selected[1];
+  }
+
+  const orientation = options.orientation.toLowerCase();
+  if (orientation === 'landscape' && targetWidth < targetHeight) {
+    [targetWidth, targetHeight] = [targetHeight, targetWidth];
+  } else if (orientation === 'portrait' && targetWidth > targetHeight) {
+    [targetWidth, targetHeight] = [targetHeight, targetWidth];
+  }
+
+  const sourceDoc = await loadPdfDocument(pdfBytes);
+  const outputDoc = await PDFDocument.create();
+
+  for (const sourcePage of sourceDoc.getPages()) {
+    const { width: sourceWidth, height: sourceHeight } = sourcePage.getSize();
+    const embeddedPage = await outputDoc.embedPage(sourcePage);
+
+    let pageTargetWidth = targetWidth;
+    let pageTargetHeight = targetHeight;
+
+    if (orientation === 'auto') {
+      const isSourceLandscape = sourceWidth > sourceHeight;
+      const isTargetLandscape = pageTargetWidth > pageTargetHeight;
+      if (isSourceLandscape !== isTargetLandscape) {
+        [pageTargetWidth, pageTargetHeight] = [
+          pageTargetHeight,
+          pageTargetWidth,
+        ];
+      }
+    }
+
+    const outputPage = outputDoc.addPage([pageTargetWidth, pageTargetHeight]);
+    outputPage.drawRectangle({
+      x: 0,
+      y: 0,
+      width: pageTargetWidth,
+      height: pageTargetHeight,
+      color: rgb(
+        options.backgroundColor.r,
+        options.backgroundColor.g,
+        options.backgroundColor.b
+      ),
+    });
+
+    const scaleX = pageTargetWidth / sourceWidth;
+    const scaleY = pageTargetHeight / sourceHeight;
+    const useFill = options.scalingMode.toLowerCase() === 'fill';
+    const scale = useFill ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY);
+
+    const scaledWidth = sourceWidth * scale;
+    const scaledHeight = sourceHeight * scale;
+
+    const x = (pageTargetWidth - scaledWidth) / 2;
+    const y = (pageTargetHeight - scaledHeight) / 2;
+
+    outputPage.drawPage(embeddedPage, {
+      x,
+      y,
+      width: scaledWidth,
+      height: scaledHeight,
+    });
+  }
+
+  return new Uint8Array(await outputDoc.save());
 }

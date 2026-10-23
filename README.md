@@ -1,14 +1,19 @@
 <p align="center"><img src="public/images/favicon-no-bg.svg" width="80"></p>
 <h1 align="center">BentoPDF</h1>
+<p align="center"><sub>Supported by</sub></p>
 <p align="center">
+  <a href="https://vercel.com/open-source-program">
+    <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge-2026.svg" height="30" />
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://www.digitalocean.com/?refcode=d93c189ef6d0&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge">
-    <img src="https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%203.svg" alt="DigitalOcean Referral Badge">
+    <img src="https://web-platforms.sfo2.cdn.digitaloceanspaces.com/WWW/Badge%203.svg" alt="DigitalOcean Referral Badge" height="44">
   </a>
 </p>
 
-**BentoPDF** is a powerful, privacy-first, client-side PDF toolkit that is self hostable and allows you to manipulate, edit, merge, and process PDF files directly in your browser. No server-side processing is required, ensuring your files remain secure and private.
+**BentoPDF** is a powerful, privacy-first, client-side PDF toolkit that is self-hostable and allows you to manipulate, edit, merge, and process PDF files directly in your browser. No server-side processing is required, ensuring your files remain secure and private.
 
-[![Docker Downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fghcr-badge.elias.eu.org%2Fapi%2Falam00000%2Fbentopdf%2Fbentopdf&query=%24.downloadCount&logo=docker&label=Docker%20Downloads&color=blue)](https://github.com/alam00000/bentopdf/pkgs/container/bentopdf) [![Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20Coffee-yellow?logo=kofi&style=flat-square)](https://ko-fi.com/alio01) ![GitHub Stars](https://img.shields.io/github/stars/alam00000/bentopdf?style=social)
+[![Docker Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Falam00000%2Fbentopdf%2Fbadges%2Fdocker-downloads.json&cacheSeconds=3600)](https://github.com/alam00000/bentopdf/pkgs/container/bentopdf-simple) [![Ko-fi](https://img.shields.io/badge/Buy%20me%20a%20Coffee-yellow?logo=kofi&style=flat-square)](https://ko-fi.com/alio01) ![GitHub Stars](https://img.shields.io/github/stars/alam00000/bentopdf?style=social)
 [![Sponsor me on GitHub](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ff69b4)](https://github.com/sponsors/alam00000)
 
 ![BentoPDF Tools](public/images/bentopdf-tools.png)
@@ -29,6 +34,7 @@
   - [Convert to PDF](#convert-to-pdf)
   - [Convert from PDF](#convert-from-pdf)
   - [Secure & Optimize PDFs](#secure--optimize-pdfs)
+- [Other Products](#-other-products)
 - [Translations](#-translations)
 - [Getting Started](#-getting-started)
   - [Prerequisites](#prerequisites)
@@ -37,8 +43,11 @@
   - [Self-Hosting Locally](#-self-hosting-locally)
   - [Docker Compose / Podman Compose](#-run-with-docker-compose--podman-compose-recommended)
   - [Podman Quadlet](#-podman-quadlet-systemd-integration)
-  - [Simple Mode](#-simple-mode-for-internal-use)
+  - [Self-Hosted Build (Simple Mode)](#-self-hosted-build-simple-mode)
+  - [Commercial Build](#-commercial-build)
   - [Custom Branding](#-custom-branding)
+  - [Disabling Specific Tools](#-disabling-specific-tools)
+  - [Disabling the GitHub Star Counter](#-disabling-the-github-star-counter)
   - [WASM Configuration](#wasm-configuration)
   - [Air-Gapped / Offline Deployment](#air-gapped--offline-deployment)
   - [Security Features](#-security-features)
@@ -81,11 +90,11 @@ BentoPDF is **dual-licensed** to fit your needs:
 | License        | Best For                                     | Price              |
 | -------------- | -------------------------------------------- | ------------------ |
 | **AGPL-3.0**   | Open-source projects with public source code | **Free**           |
-| **Commercial** | Proprietary / closed-source applications     | **$49** (lifetime) |
+| **Commercial** | Proprietary / closed-source applications     | **$79** (lifetime) |
 
 <p align="center">
   <a href="https://buy.polar.sh/polar_cl_ThDfffbl733x7oAodcIryCzhlO57ZtcWPq6HJ1qMChd">
-    <img src="https://img.shields.io/badge/🚀_Get_Commercial_License-$49_Lifetime-6366f1?style=for-the-badge&labelColor=1f2937" alt="Get Commercial License">
+    <img src="https://img.shields.io/badge/🚀_Get_Commercial_License-$79_Lifetime-6366f1?style=for-the-badge&labelColor=1f2937" alt="Get Commercial License">
   </a>
 </p>
 
@@ -110,7 +119,7 @@ BentoPDF does **not** bundle AGPL-licensed processing libraries in its source co
 
 ## ⭐ Stargazers over time
 
-[![Star History Chart](https://api.star-history.com/svg?repos=alam00000/bentopdf&type=Date)](https://star-history.com/#alam00000/bentopdf&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=alam00000/bentopdf&type=Date)](https://github.com/alam00000/bentopdf/stargazers)
 
 ---
 
@@ -129,7 +138,7 @@ We're incredibly grateful to all our sponsors and supporters who help keep Bento
 ## ✨ Why BentoPDF?
 
 - **Privacy First**: All processing happens in your browser. Your files are never uploaded to a server, guaranteeing 100% privacy.
-- **No Limits**: Manipulate as many files as you want, as often you want. There are no restrictions or upload limits.
+- **No Limits**: Manipulate as many files as you want, as often as you want. There are no restrictions or upload limits.
 - **High Performance**: Built with modern web technologies, BentoPDF is fast and efficient, handling even large PDF files with ease.
 - **Completely Free**: BentoPDF is a free and open-source tool for everyone.
 
@@ -141,37 +150,38 @@ BentoPDF offers a comprehensive suite of tools to handle all your PDF needs.
 
 ### Organize & Manage PDFs
 
-| Tool Name                    | Description                                                                                             |
-| :--------------------------- | :------------------------------------------------------------------------------------------------------ |
-| **Merge PDFs**               | Combine multiple PDF files into one. Preserves Bookmarks.                                               |
-| **Split PDFs**               | Extract specific pages or divide a document into smaller files.                                         |
-| **Organize Pages**           | Reorder, duplicate, or delete pages with a simple drag-and-drop interface.                              |
-| **Extract Pages**            | Save a specific range of pages as a new PDF.                                                            |
-| **Delete Pages**             | Remove unwanted pages from your document.                                                               |
-| **Rotate PDF**               | Rotate individual or all pages in a document.                                                           |
-| **Rotate by Custom Degrees** | Rotate pages by any custom angle.                                                                       |
-| **N-Up PDF**                 | Combine multiple pages onto a single page.                                                              |
-| **View PDF**                 | A powerful, integrated PDF viewer.                                                                      |
-| **Alternate & Mix Pages**    | Merge pages by alternating pages from each PDF. Preserves Bookmarks.                                    |
-| **Posterize PDF**            | Split a PDF into multiple smaller pages for print.                                                      |
-| **PDF Multi Tool**           | Merge, Split, Organize, Delete, Rotate, Add Blank Pages, Extract and Duplicate in an unified interface. |
-| **PDF Booklet**              | Rearrange pages for double-sided booklet printing. Fold and staple to create a booklet.                 |
-| **Add Attachments**          | Embed one or more files into your PDF.                                                                  |
-| **Extract Attachments**      | Extract all embedded files from PDF(s) as a ZIP.                                                        |
-| **Edit Attachments**         | View or remove attachments in your PDF.                                                                 |
-| **Divide Pages**             | Divide pages horizontally or vertically.                                                                |
-| **Combine to Single Page**   | Stitch all pages into one continuous scroll.                                                            |
-| **Add Blank Page**           | Insert an empty page anywhere in your PDF.                                                              |
-| **Reverse Pages**            | Flip the order of all pages in your document.                                                           |
-| **View Metadata**            | Inspect the hidden properties of your PDF.                                                              |
-| **PDFs to ZIP**              | Package multiple PDF files into a ZIP archive.                                                          |
-| **Compare PDFs**             | Compare two PDFs side by side.                                                                          |
+| Tool Name                    | Description                                                                                            |
+| :--------------------------- | :----------------------------------------------------------------------------------------------------- |
+| **Merge PDFs**               | Combine multiple PDF files into one. Preserves Bookmarks.                                              |
+| **Split PDFs**               | Extract specific pages or divide a document into smaller files.                                        |
+| **Organize Pages**           | Reorder, duplicate, or delete pages with a simple drag-and-drop interface.                             |
+| **Extract Pages**            | Save a specific range of pages as a new PDF.                                                           |
+| **Delete Pages**             | Remove unwanted pages from your document.                                                              |
+| **Rotate PDF**               | Rotate individual or all pages in a document.                                                          |
+| **Rotate by Custom Degrees** | Rotate pages by any custom angle.                                                                      |
+| **N-Up PDF**                 | Combine multiple pages onto a single page.                                                             |
+| **View PDF**                 | A powerful, integrated PDF viewer.                                                                     |
+| **Alternate & Mix Pages**    | Merge pages by alternating pages from each PDF. Preserves Bookmarks.                                   |
+| **Posterize PDF**            | Split a PDF into multiple smaller pages for print.                                                     |
+| **PDF Multi Tool**           | Merge, Split, Organize, Delete, Rotate, Add Blank Pages, Extract and Duplicate in a unified interface. |
+| **PDF Booklet**              | Rearrange pages for double-sided booklet printing. Fold and staple to create a booklet.                |
+| **Add Attachments**          | Embed one or more files into your PDF.                                                                 |
+| **Extract Attachments**      | Extract all embedded files from PDF(s) as a ZIP.                                                       |
+| **Edit Attachments**         | View or remove attachments in your PDF.                                                                |
+| **Divide Pages**             | Divide pages horizontally or vertically.                                                               |
+| **Combine to Single Page**   | Stitch all pages into one continuous scroll.                                                           |
+| **Add Blank Page**           | Insert an empty page anywhere in your PDF.                                                             |
+| **Reverse Pages**            | Flip the order of all pages in your document.                                                          |
+| **View Metadata**            | Inspect the hidden properties of your PDF.                                                             |
+| **PDFs to ZIP**              | Package multiple PDF files into a ZIP archive.                                                         |
+| **Compare PDFs**             | Compare two PDFs side by side.                                                                         |
 
 ### Edit & Modify PDFs
 
 | Tool Name                 | Description                                                                                                                                                                                     |
 | :------------------------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **PDF Editor**            | Annotate, highlight, redact, comment, add shapes/images, search, and view PDFs.                                                                                                                 |
+| **Edit PDF Text**         | Edit existing text directly in your PDF. Reuses the document's embedded fonts and keeps the rest of the page untouched.                                                                         |
 | **Create Fillable Forms** | Create professional fillable PDF forms with text fields, checkboxes, dropdowns, radio buttons, signatures, and more. Fully compliant with PDF standards for compatibility with all PDF viewers. |
 | **PDF Form Filler**       | Fill in forms directly in the browser. Also supports XFA forms.                                                                                                                                 |
 | **Add Page Numbers**      | Easily add page numbers with customizable formatting.                                                                                                                                           |
@@ -248,6 +258,7 @@ BentoPDF offers a comprehensive suite of tools to handle all your PDF needs.
 | **PDF to WebP**      | Convert each PDF page into a WebP image.                                       |
 | **PDF to BMP**       | Convert each PDF page into a BMP image.                                        |
 | **PDF to TIFF**      | Convert each PDF page into a TIFF image.                                       |
+| **PDF to CBZ**       | Convert a PDF into a CBZ (Comic Book Archive) for comic readers and Calibre.   |
 | **PDF to SVG**       | Convert each page into a scalable vector graphic (SVG) for perfect quality.    |
 | **PDF to Greyscale** | Convert a color PDF into a black-and-white version.                            |
 | **PDF to Text**      | Extract text from PDF files and save as plain text (.txt).                     |
@@ -296,6 +307,8 @@ BentoPDF is available in multiple languages:
 | Portuguese          | [![Portuguese](https://img.shields.io/badge/Complete-green?style=flat-square)](public/locales/pt/common.json)             |
 | Turkish             | [![Turkish](https://img.shields.io/badge/Complete-green?style=flat-square)](public/locales/tr/common.json)                |
 | Vietnamese          | [![Vietnamese](https://img.shields.io/badge/Complete-green?style=flat-square)](public/locales/vi/common.json)             |
+| Korean              | [![Korean](https://img.shields.io/badge/Complete-green?style=flat-square)](public/locales/ko/common.json)                 |
+| Russian             | [![Russian](https://img.shields.io/badge/Complete-green?style=flat-square)](public/locales/ru/common.json)                |
 
 Want to help translate BentoPDF into your language? Check out our [Translation Guide](TRANSLATION.md)!
 
@@ -316,10 +329,18 @@ You can run BentoPDF locally for development or personal use.
 Run BentoPDF instantly from GitHub Container Registry (Recommended):
 
 ```bash
-docker run -p 3000:8080 ghcr.io/alam00000/bentopdf:latest
+docker run -p 3000:8080 ghcr.io/alam00000/bentopdf-simple:latest
 ```
 
 Open your browser at: http://localhost:3000
+
+> [!TIP]
+> BentoPDF ships in two builds:
+>
+> - **Self-Hosted build** — `ghcr.io/alam00000/bentopdf-simple:latest`. Every PDF tool the public site has, **without** the BentoPDF marketing (no hero, FAQ, testimonials, footer). Use this for internal/team/organization deployments. It is **not** a feature-reduced lite version.
+> - **Commercial build** — `ghcr.io/alam00000/bentopdf:latest`. The full marketing site, used by bentopdf.com itself and by commercial license holders running public-facing deployments. Includes hero, FAQ, testimonials, and footer.
+>
+> If in doubt: pull the Self-Hosted build.
 
 <details>
 <summary><b>Alternative: Using Docker Hub or Podman</b></summary>
@@ -327,19 +348,19 @@ Open your browser at: http://localhost:3000
 **Docker Hub:**
 
 ```bash
-docker run -p 3000:8080 bentopdfteam/bentopdf:latest
+docker run -p 3000:8080 bentopdfteam/bentopdf-simple:latest
 ```
 
 **Podman (GHCR):**
 
 ```bash
-podman run -p 3000:8080 ghcr.io/alam00000/bentopdf:latest
+podman run -p 3000:8080 ghcr.io/alam00000/bentopdf-simple:latest
 ```
 
 **Podman (Docker Hub):**
 
 ```bash
-podman run -p 3000:8080 docker.io/bentopdfteam/bentopdf:latest
+podman run -p 3000:8080 docker.io/bentopdfteam/bentopdf-simple:latest
 ```
 
 > [!NOTE]
@@ -354,6 +375,9 @@ It is very straightforward to host your own instance of BentoPDF using a static 
 ### 🏠 Self-Hosting Locally
 
 Since BentoPDF is fully client-side, all processing happens in the user's browser and no server-side processing is required. This means you can host BentoPDF as simple static files on any web server or hosting platform.
+
+> [!IMPORTANT]
+> Office file conversion uses LibreOffice WASM, which requires `SharedArrayBuffer`. That means the app must be both cross-origin isolated and served from a secure context. `http://localhost` works for local testing, but `http://192.168.x.x` or other LAN IPs usually require HTTPS even if the server already sends the correct COOP/COEP headers.
 
 **Download from Releases (Recommended):**
 
@@ -459,8 +483,13 @@ The default URLs are set in `.env.production`:
 
 ```bash
 VITE_WASM_PYMUPDF_URL=https://cdn.jsdelivr.net/npm/@bentopdf/pymupdf-wasm@0.11.16/
-VITE_WASM_GS_URL=https://cdn.jsdelivr.net/npm/@bentopdf/gs-wasm/assets/
-VITE_WASM_CPDF_URL=https://cdn.jsdelivr.net/npm/coherentpdf/dist/
+VITE_WASM_GS_URL=https://cdn.jsdelivr.net/npm/@bentopdf/gs-wasm@0.1.1/assets/
+VITE_WASM_CPDF_URL=https://cdn.jsdelivr.net/npm/coherentpdf@2.5.5/dist/
+VITE_TESSERACT_WORKER_URL=
+VITE_TESSERACT_CORE_URL=
+VITE_TESSERACT_LANG_URL=
+VITE_TESSERACT_AVAILABLE_LANGUAGES=
+VITE_OCR_FONT_BASE_URL=
 ```
 
 To override via Docker build args:
@@ -470,10 +499,17 @@ docker build \
   --build-arg VITE_WASM_PYMUPDF_URL=https://your-server.com/pymupdf/ \
   --build-arg VITE_WASM_GS_URL=https://your-server.com/gs/ \
   --build-arg VITE_WASM_CPDF_URL=https://your-server.com/cpdf/ \
+  --build-arg VITE_TESSERACT_WORKER_URL=https://your-server.com/ocr/worker.min.js \
+  --build-arg VITE_TESSERACT_CORE_URL=https://your-server.com/ocr/core \
+  --build-arg VITE_TESSERACT_LANG_URL=https://your-server.com/ocr/lang-data \
+  --build-arg VITE_TESSERACT_AVAILABLE_LANGUAGES=eng,deu \
+  --build-arg VITE_OCR_FONT_BASE_URL=https://your-server.com/ocr/fonts \
   -t bentopdf .
 ```
 
 To disable a module (require manual user config via Advanced Settings), set its variable to an empty string.
+
+For OCR, either leave all `VITE_TESSERACT_*` variables empty and use the default online assets, or set the worker/core/lang URLs together for self-hosted/offline OCR. If your self-hosted bundle only includes a subset such as `eng,deu`, also set `VITE_TESSERACT_AVAILABLE_LANGUAGES=eng,deu` so the UI only shows bundled languages and OCR fails with a descriptive message for unsupported ones. For fully offline searchable-PDF output, also set `VITE_OCR_FONT_BASE_URL` to the internal directory that serves the bundled OCR text-layer fonts.
 
 Users can also override these defaults per-browser via **Advanced Settings** in the UI — user overrides take priority over the environment defaults.
 
@@ -492,6 +528,12 @@ The included `prepare-airgap.sh` script automates the entire process — downloa
 git clone https://github.com/alam00000/bentopdf.git
 cd bentopdf
 
+# Show supported OCR language codes (for --ocr-languages)
+bash scripts/prepare-airgap.sh --list-ocr-languages
+
+# Search OCR language codes by name or abbreviation
+bash scripts/prepare-airgap.sh --search-ocr-language german
+
 # Interactive mode — prompts for all options
 bash scripts/prepare-airgap.sh
 
@@ -504,7 +546,9 @@ This produces a bundle directory containing:
 ```
 bentopdf-airgap-bundle/
   bentopdf.tar              # Docker image
-  *.tgz                     # WASM packages (PyMuPDF, Ghostscript, CoherentPDF)
+  *.tgz                     # WASM packages (PyMuPDF, Ghostscript, CoherentPDF, Tesseract)
+  tesseract-langdata/       # OCR traineddata files
+  ocr-fonts/                # OCR text-layer font files
   setup.sh                  # Setup script for the air-gapped side
   README.md                 # Instructions
 ```
@@ -521,22 +565,27 @@ The setup script loads the Docker image, extracts WASM files, and optionally sta
 <details>
 <summary><strong>Script options</strong></summary>
 
-| Flag                    | Description                                      | Default                           |
-| ----------------------- | ------------------------------------------------ | --------------------------------- |
-| `--wasm-base-url <url>` | Where WASMs will be hosted internally            | _(required, prompted if missing)_ |
-| `--image-name <name>`   | Docker image tag                                 | `bentopdf`                        |
-| `--output-dir <path>`   | Output bundle directory                          | `./bentopdf-airgap-bundle`        |
-| `--simple-mode`         | Enable Simple Mode                               | off                               |
-| `--base-url <path>`     | Subdirectory base URL (e.g. `/pdf/`)             | `/`                               |
-| `--language <code>`     | Default UI language (e.g. `fr`, `de`)            | _(none)_                          |
-| `--brand-name <name>`   | Custom brand name                                | _(none)_                          |
-| `--brand-logo <path>`   | Logo path relative to `public/`                  | _(none)_                          |
-| `--footer-text <text>`  | Custom footer text                               | _(none)_                          |
-| `--dockerfile <path>`   | Dockerfile to use                                | `Dockerfile`                      |
-| `--skip-docker`         | Skip Docker build and export                     | off                               |
-| `--skip-wasm`           | Skip WASM download (reuse existing `.tgz` files) | off                               |
+| Flag                           | Description                                      | Default                           |
+| ------------------------------ | ------------------------------------------------ | --------------------------------- |
+| `--wasm-base-url <url>`        | Where WASMs will be hosted internally            | _(required, prompted if missing)_ |
+| `--image-name <name>`          | Docker image tag                                 | `bentopdf`                        |
+| `--output-dir <path>`          | Output bundle directory                          | `./bentopdf-airgap-bundle`        |
+| `--simple-mode`                | Enable Simple Mode                               | off                               |
+| `--base-url <path>`            | Subdirectory base URL (e.g. `/pdf/`)             | `/`                               |
+| `--language <code>`            | Default UI language (e.g. `fr`, `de`)            | _(none)_                          |
+| `--brand-name <name>`          | Custom brand name                                | _(none)_                          |
+| `--brand-logo <path>`          | Logo path relative to `public/`                  | _(none)_                          |
+| `--footer-text <text>`         | Custom footer text                               | _(none)_                          |
+| `--ocr-languages <list>`       | Comma-separated OCR languages to bundle          | `eng`                             |
+| `--list-ocr-languages`         | Print supported OCR codes and names, then exit   | off                               |
+| `--search-ocr-language <term>` | Search OCR codes by name or abbreviation         | off                               |
+| `--dockerfile <path>`          | Dockerfile to use                                | `Dockerfile`                      |
+| `--skip-docker`                | Skip Docker build and export                     | off                               |
+| `--skip-wasm`                  | Skip WASM download (reuse existing `.tgz` files) | off                               |
 
 </details>
+
+The interactive prompt also accepts `list` to print the full supported Tesseract code list and `search <term>` to find matches such as `search german` or `search chi`.
 
 > [!IMPORTANT]
 > WASM files must be served from the **same origin** as the BentoPDF app. Web Workers use `importScripts()` which cannot load scripts cross-origin. For example, if BentoPDF runs at `https://internal.example.com`, the WASM base URL should also be `https://internal.example.com/wasm`.
@@ -546,12 +595,18 @@ The setup script loads the Docker image, extracts WASM files, and optionally sta
 <details>
 <summary>If you prefer to do it manually without the script</summary>
 
-**Step 1: Download the WASM packages** (on a machine with internet)
+**Step 1: Download the WASM and OCR packages** (on a machine with internet)
 
 ```bash
-npm pack @bentopdf/pymupdf-wasm@0.11.14
+npm pack @bentopdf/pymupdf-wasm@0.11.16
 npm pack @bentopdf/gs-wasm
 npm pack coherentpdf
+npm pack tesseract.js@7.0.0
+npm pack tesseract.js-core@7.0.0
+mkdir -p tesseract-langdata
+curl -fsSL https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz -o tesseract-langdata/eng.traineddata.gz
+mkdir -p ocr-fonts
+curl -fsSL https://raw.githack.com/googlefonts/noto-fonts/main/hinted/ttf/NotoSans/NotoSans-Regular.ttf -o ocr-fonts/NotoSans-Regular.ttf
 ```
 
 **Step 2: Build the Docker image with internal URLs**
@@ -564,6 +619,10 @@ docker build \
   --build-arg VITE_WASM_PYMUPDF_URL=https://internal-server.example.com/wasm/pymupdf/ \
   --build-arg VITE_WASM_GS_URL=https://internal-server.example.com/wasm/gs/ \
   --build-arg VITE_WASM_CPDF_URL=https://internal-server.example.com/wasm/cpdf/ \
+  --build-arg VITE_TESSERACT_WORKER_URL=https://internal-server.example.com/wasm/ocr/worker.min.js \
+  --build-arg VITE_TESSERACT_CORE_URL=https://internal-server.example.com/wasm/ocr/core \
+  --build-arg VITE_TESSERACT_LANG_URL=https://internal-server.example.com/wasm/ocr/lang-data \
+  --build-arg VITE_OCR_FONT_BASE_URL=https://internal-server.example.com/wasm/ocr/fonts \
   -t bentopdf .
 ```
 
@@ -581,6 +640,10 @@ Copy these files via USB drive, internal artifact repository, or approved transf
 - `bentopdf-pymupdf-wasm-0.11.14.tgz` — PyMuPDF WASM package
 - `bentopdf-gs-wasm-*.tgz` — Ghostscript WASM package
 - `coherentpdf-*.tgz` — CoherentPDF WASM package
+- `tesseract.js-7.0.0.tgz` — Tesseract worker package
+- `tesseract.js-core-7.0.0.tgz` — Tesseract core runtime package
+- `tesseract-langdata/` — OCR traineddata files
+- `ocr-fonts/` — OCR text-layer font files
 
 **Step 5: Set up inside the air-gapped network**
 
@@ -589,16 +652,23 @@ Copy these files via USB drive, internal artifact repository, or approved transf
 docker load -i bentopdf.tar
 
 # Extract the WASM packages
-mkdir -p ./wasm/pymupdf ./wasm/gs ./wasm/cpdf
+mkdir -p ./wasm/pymupdf ./wasm/gs ./wasm/cpdf ./wasm/ocr/core ./wasm/ocr/lang-data ./wasm/ocr/fonts
 tar xzf bentopdf-pymupdf-wasm-0.11.14.tgz -C ./wasm/pymupdf --strip-components=1
 tar xzf bentopdf-gs-wasm-*.tgz -C ./wasm/gs --strip-components=1
 tar xzf coherentpdf-*.tgz -C ./wasm/cpdf --strip-components=1
+TEMP_TESS=$(mktemp -d)
+tar xzf tesseract.js-7.0.0.tgz -C "$TEMP_TESS"
+cp "$TEMP_TESS/package/dist/worker.min.js" ./wasm/ocr/worker.min.js
+rm -rf "$TEMP_TESS"
+tar xzf tesseract.js-core-7.0.0.tgz -C ./wasm/ocr/core --strip-components=1
+cp ./tesseract-langdata/*.traineddata.gz ./wasm/ocr/lang-data/
+cp ./ocr-fonts/* ./wasm/ocr/fonts/
 
 # Run BentoPDF
 docker run -d -p 3000:8080 --restart unless-stopped bentopdf
 ```
 
-Make sure the WASM files are accessible at the URLs you configured in Step 2.
+Make sure the files are accessible at the URLs you configured in Step 2, including `.../ocr/worker.min.js`, `.../ocr/core`, `.../ocr/lang-data`, and `.../ocr/fonts`.
 
 </details>
 
@@ -609,6 +679,10 @@ Make sure the WASM files are accessible at the URLs you configured in Step 2.
 > VITE_WASM_PYMUPDF_URL=https://internal-server.example.com/wasm/pymupdf/
 > VITE_WASM_GS_URL=https://internal-server.example.com/wasm/gs/
 > VITE_WASM_CPDF_URL=https://internal-server.example.com/wasm/cpdf/
+> VITE_TESSERACT_WORKER_URL=https://internal-server.example.com/wasm/ocr/worker.min.js
+> VITE_TESSERACT_CORE_URL=https://internal-server.example.com/wasm/ocr/core
+> VITE_TESSERACT_LANG_URL=https://internal-server.example.com/wasm/ocr/lang-data
+> VITE_OCR_FONT_BASE_URL=https://internal-server.example.com/wasm/ocr/fonts
 > ```
 
 **Subdirectory Hosting:**
@@ -618,7 +692,7 @@ BentoPDF can also be hosted from a subdirectory (e.g., `example.com/tools/bentop
 ```bash
 
 # Example:
-# 1. Build the app with the specific BASE_URL. BASE_URL must have a trailing and leading slash. The BASE_URL can be any url of your choice. Here we are using /tools/bentopdf/ as an example.
+# 1. Build the app with the specific BASE_URL. BASE_URL must have a trailing and leading slash. The BASE_URL can be any URL of your choice. Here we are using /tools/bentopdf/ as an example.
 
 BASE_URL=/tools/bentopdf/ npm run build
 
@@ -684,8 +758,9 @@ For a more robust setup with auto-restart capabilities:
 ```yaml
 services:
   bentopdf:
-    image: ghcr.io/alam00000/bentopdf:latest # Recommended
-    # image: bentopdfteam/bentopdf:latest     # Alternative: Docker Hub
+    image: ghcr.io/alam00000/bentopdf-simple:latest # Self-Hosted build (recommended)
+    # image: bentopdfteam/bentopdf-simple:latest     # Self-Hosted build (Docker Hub)
+    # image: ghcr.io/alam00000/bentopdf:latest       # Commercial build (bentopdf.com / commercial license holders)
     container_name: bentopdf
     ports:
       - '3000:8080'
@@ -716,7 +791,7 @@ Description=BentoPDF - Privacy-first PDF toolkit
 After=network-online.target
 
 [Container]
-Image=ghcr.io/alam00000/bentopdf:latest
+Image=ghcr.io/alam00000/bentopdf-simple:latest
 ContainerName=bentopdf
 PublishPort=3000:8080
 AutoUpdate=registry
@@ -737,18 +812,61 @@ systemctl --user enable --now bentopdf
 
 For detailed Quadlet configuration, see [Self-Hosting Docker Guide](https://bentopdf.com/docs/self-hosting/docker).
 
-### 🏢 Simple Mode for Internal Use
+### 🏢 Self-Hosted build (Simple Mode)
 
-For organizations that want a clean, distraction-free interface focused solely on PDF tools, BentoPDF supports a **Simple Mode** that hides all branding and marketing content.
+The Self-Hosted build (the `bentopdf-simple` image, also called Simple Mode) is **functionally identical** to the Commercial build. Every PDF tool is present and behaves the same. It just hides the marketing that only makes sense on bentopdf.com itself or on a commercial public-facing deployment. **It is not a feature-reduced or "lite" version.**
 
-**What Simple Mode does:**
+**What the Self-Hosted build hides** (cosmetic only, no PDF features are removed):
 
-- Hides navigation, hero section, features, FAQ, testimonials, and footer
-- Shows only the essential PDF tools
+- Navigation bar, hero section, features section, FAQ, testimonials, footer
 - Updates page title to "PDF Tools"
-- Perfect for internal company tools and educational institutions
 
-For more details, see [SIMPLE_MODE.md](SIMPLE_MODE.md).
+**What the Self-Hosted build keeps** (everything that actually does PDF work):
+
+- All PDF tools (merge, split, edit, sign, OCR, Office conversion, every other tool)
+- Custom branding support, all build-time and runtime config
+
+The Commercial build (`ghcr.io/alam00000/bentopdf:latest`) is what powers bentopdf.com itself and is used by commercial license holders running public-facing deployments. It adds the hero, FAQ, testimonials, and footer that wouldn't make sense on an internal tool.
+
+If you're self-hosting BentoPDF for your team, organization, or as an internal tool, pull `ghcr.io/alam00000/bentopdf-simple:latest`. For more details, see [SIMPLE_MODE.md](SIMPLE_MODE.md).
+
+### 🏬 Commercial Build
+
+The Commercial build (the `bentopdf` image. Note: no `-simple` suffix) is what powers bentopdf.com itself. It includes the full marketing site (hero, features, FAQ, testimonials, footer) on top of every PDF tool. Use this build when you're running BentoPDF as a **public-facing PDF service under your own brand**. For example:
+
+- You're deploying BentoPDF as a hosted SaaS for end-users (with your own domain and branding)
+- You want the landing-page experience (marketing sections + tools), not just the tool surface
+- You're a commercial license holder embedding BentoPDF into a commercial product or workflow
+
+**Run it as-is** (carries BentoPDF branding by default. Useful to evaluate what the build looks like):
+
+```bash
+docker run -p 3000:8080 ghcr.io/alam00000/bentopdf:latest
+```
+
+**Build with your own brand** (the typical commercial path — replace the BentoPDF logo, name, and footer):
+
+```bash
+docker build \
+  --build-arg VITE_BRAND_NAME="AcmePDF" \
+  --build-arg VITE_BRAND_LOGO="images/acme-logo.svg" \
+  --build-arg VITE_FOOTER_TEXT="© 2026 Acme Corp. All rights reserved." \
+  -t acmepdf .
+
+docker run -p 3000:8080 acmepdf
+```
+
+Or set the same variables when building from source — see [Custom Branding](#-custom-branding) below for the full list of options.
+
+**Combine with other build-time flags** (`BASE_URL`, `VITE_DEFAULT_LANGUAGE`, `DISABLE_TOOLS`, `VITE_USE_CDN`, WASM URL overrides for air-gapped use, etc.) — every option that works on the Self-Hosted build also works here.
+
+> [!IMPORTANT]
+> **Licensing**: Running the Commercial build is allowed under both license options BentoPDF ships under:
+>
+> - **AGPL-3.0** (free): allowed if your deployment publishes its full source code under AGPL — this includes any branding modifications, custom configuration, and any code you build on top of it.
+> - **Commercial license** ($79 lifetime): required for closed-source / proprietary deployments — e.g., a private SaaS where you don't open-source your branding fork or surrounding business logic.
+>
+> See the [Licensing page](https://bentopdf.com/licensing.html) for the full comparison.
 
 ### 🎨 Custom Branding
 
@@ -786,12 +904,68 @@ Or set the values in `.env.production` before building.
 > [!TIP]
 > Branding works in both full mode and Simple Mode. You can combine it with other build-time options like `SIMPLE_MODE`, `BASE_URL`, and `VITE_DEFAULT_LANGUAGE`.
 
+### 🚫 Disabling Specific Tools
+
+Hide tools from the UI for compliance or security requirements. Disabled tools are removed from the homepage, search, keyboard shortcuts, workflow builder, and direct URL access.
+
+Tool IDs are the page URL without `.html` — open any tool and look at the URL (e.g., `edit-pdf`, `sign-pdf`, `encrypt-pdf`).
+
+**Build-time** (baked into the bundle):
+
+```bash
+docker build --build-arg DISABLE_TOOLS="edit-pdf,sign-pdf,encrypt-pdf" -t bentopdf .
+```
+
+**Runtime** (no rebuild — mount a `config.json`):
+
+```json
+{
+  "disabledTools": ["edit-pdf", "sign-pdf", "encrypt-pdf"]
+}
+```
+
+```bash
+docker run -d -p 3000:8080 \
+  -v ./config.json:/usr/share/nginx/html/config.json:ro \
+  ghcr.io/alam00000/bentopdf-simple:latest
+```
+
+Both methods can be combined — the lists are merged. For the full list of tool IDs, see the [self-hosting docs](https://bentopdf.com/docs/self-hosting/docker#disabling-specific-tools).
+
+You can also disable specific features inside the PDF Editor (e.g., redaction, forms) without disabling the entire editor. Add `editorDisabledCategories` to your `config.json`:
+
+```json
+{
+  "editorDisabledCategories": ["redaction"]
+}
+```
+
+For the full list of editor categories, see the [self-hosting docs](https://bentopdf.com/docs/self-hosting/docker#disabling-editor-features).
+
+### 🔕 Disabling the GitHub Star Counter
+
+The navbar shows a live GitHub star count, fetched from `api.github.com` on page load. The only external request that isn't serving a PDF feature. Self-hosters who want zero non-essential network calls can disable it at build time. This removes the fetch code from the bundle entirely and drops `api.github.com` from the Content-Security-Policy.
+
+Simple Mode builds (`bentopdf-simple`) always skip the star counter — this flag is only needed on the Commercial build or custom full builds.
+
+**Docker:**
+
+```bash
+docker build --build-arg DISABLE_GITHUB_STARS=true -t bentopdf .
+```
+
+**Building from source:**
+
+```bash
+DISABLE_GITHUB_STARS=true npm run build
+```
+
 ### 🔒 Security Features
 
 BentoPDF runs as a non-root user using nginx-unprivileged for enhanced security:
 
 - **Non-Root Execution**: Container runs with minimal privileges using nginx-unprivileged
-- **Port 8080**: Uses high port number to avoid requiring root privileges
+- **Port 8080**: Uses high port number to avoid requiring root privileges (configurable via `PORT` env var)
 - **Security Best Practices**: Follows Principle of Least Privilege
 
 #### Basic Usage
@@ -800,6 +974,18 @@ BentoPDF runs as a non-root user using nginx-unprivileged for enhanced security:
 docker build -t bentopdf .
 docker run -p 8080:8080 bentopdf
 ```
+
+#### Custom Port
+
+By default, BentoPDF listens on port `8080` inside the container. To change this, set the `PORT` environment variable:
+
+```bash
+docker run -p 3000:9090 -e PORT=9090 ghcr.io/alam00000/bentopdf-simple:latest
+```
+
+| Variable | Description                    | Default |
+| -------- | ------------------------------ | ------- |
+| `PORT`   | Nginx listen port in container | `8080`  |
 
 #### Custom User ID (PUID/PGID)
 
@@ -942,19 +1128,19 @@ DOCKER_BUILDKIT=1 docker build \
 
 ### 📦 Version Management
 
-BentoPDF supports semantic versioning with multiple container tags available:
+BentoPDF publishes two image variants. Both ship the same PDF tools. The difference is purely whether the bentopdf.com marketing is included.
 
-**GitHub Container Registry (Recommended):**
+**Self-Hosted build** — recommended for internal/team/organization deployments:
+
+- **Latest**: `ghcr.io/alam00000/bentopdf-simple:latest`
+- **Specific Version**: `ghcr.io/alam00000/bentopdf-simple:1.0.0`
+- **Docker Hub**: `bentopdfteam/bentopdf-simple:latest`
+
+**Commercial build** — used by bentopdf.com itself and by commercial license holders running public-facing deployments:
 
 - **Latest**: `ghcr.io/alam00000/bentopdf:latest`
 - **Specific Version**: `ghcr.io/alam00000/bentopdf:1.0.0`
-- **Version with Prefix**: `ghcr.io/alam00000/bentopdf:v1.0.0`
-
-**Docker Hub:**
-
-- **Latest**: `bentopdfteam/bentopdf:latest`
-- **Specific Version**: `bentopdfteam/bentopdf:1.0.0`
-- **Version with Prefix**: `bentopdfteam/bentopdf:v1.0.0`
+- **Docker Hub**: `bentopdfteam/bentopdf:latest`
 
 #### Quick Release
 
@@ -989,10 +1175,14 @@ For detailed release instructions, see [RELEASE.md](RELEASE.md).
    ```
 
 3. **Run the Development Server**:
+
    ```bash
    npm run dev
    ```
+
    The application will be available at `http://localhost:5173`.
+
+   > The dev server binds to `localhost` only by default. To expose it on your LAN (e.g. for mobile device testing), set `VITE_DEV_HOST=0.0.0.0 npm run dev`. The built-in CORS proxy at `/cors-proxy?url=` restricts targets to a known host allowlist; to permit additional hosts in development, set `VITE_DEV_CORS_PROXY_EXTRA_HOSTS="host1.example.com,host2.example.com"`.
 
 #### Option 2: Build and Run with Docker Compose
 
@@ -1035,16 +1225,20 @@ BentoPDF was originally built using **HTML**, **CSS**, and **vanilla JavaScript*
 
 ---
 
+## 📦 Other Products
+
+| Product            | Description                                                                                                                           | Links                                                                                                  |
+| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------------------------- |
+| **Kura**           | PDF standards and preflight engine. Converts to every PDF/A level, PDF/UA, PDF/X, PDF/E and PDF/VT, and can perform preflight checks. | [Website](https://kura.bentopdf.com) · [GitHub](https://github.com/alam00000/bentopdf-kura)            |
+| **Hyper Compress** | The best open source PDF compression engine.                                                                                          | [Website](https://hyper.bentopdf.com) · [GitHub](https://github.com/alam00000/bentopdf-hyper-compress) |
+
+---
+
 ## 🗺️ Roadmap
 
 ### Planned Features:
 
 - **HTML to PDF**: Convert HTML files or web pages into PDF documents.
-- **Markdown to PDF**: Enhanced support for converting `.md` files to PDF.
-- **Convert to PDF/A**: Convert PDFs to the PDF/A archival format.
-- **Edit PDF Content**: Directly edit text and other content within your PDF.
-- **PDF to Office**: Converts PDF files into editable Word, Excel, and PowerPoint formats.
-- **Office to PDF**: Converts Word, Excel, and PowerPoint documents into optimized PDFs.
 
 Contributions and discussions on the roadmap are welcome! Join the conversation via [Discord](https://discord.gg/Bgq3Ay3f2w).
 
@@ -1105,6 +1299,10 @@ BentoPDF wouldn't be possible without the amazing open-source tools and librarie
 - **[Tailwind CSS](https://tailwindcss.com/)** – For rapid, flexible, and beautiful UI styling.
 - **[qpdf](https://github.com/qpdf/qpdf)** and **[qpdf-wasm](https://github.com/neslinesli93/qpdf-wasm)** – For inspecting, repairing, and transforming PDF files.
 - **[LibreOffice](https://www.libreoffice.org/)** – For powerful document conversion capabilities.
+- **[wasm-vips](https://github.com/kleisauke/wasm-vips)** – For advanced TIFF encoding with compression (LZW, Deflate, CCITT Group 4).
+- **[pixelmatch](https://github.com/mapbox/pixelmatch)** – For fast, accurate image comparison and diff detection.
+- **[diff](https://github.com/kpdecker/jsdiff)** – For computing text differences.
+- **[microdiff](https://github.com/AsyncBanana/microdiff)** – For lightweight, fast object diffing.
 
 **AGPL Libraries (Pre-configured via CDN):**
 

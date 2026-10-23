@@ -9,11 +9,9 @@ import { createIcons, icons } from 'lucide';
 import { PDFDocument } from 'pdf-lib';
 import { applyGreyscale } from '../utils/image-effects.js';
 import * as pdfjsLib from 'pdfjs-dist';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+import { t } from '../i18n/i18n';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
+import '../utils/setup-pdf-worker.js';
 
 let files: File[] = [];
 
@@ -44,7 +42,7 @@ const updateUI = () => {
 
       const metaSpan = document.createElement('div');
       metaSpan.className = 'text-xs text-gray-400';
-      metaSpan.textContent = `${formatBytes(file.size)} • Loading pages...`; // Initial state
+      metaSpan.textContent = `${formatBytes(file.size)} • ${t('common.loadingPageCount')}`; // Initial state
 
       infoContainer.append(nameSpan, metaSpan);
 
@@ -66,7 +64,7 @@ const updateUI = () => {
           return getPDFDocument(buffer).promise;
         })
         .then((pdf) => {
-          metaSpan.textContent = `${formatBytes(file.size)} • ${pdf.numPages} page${pdf.numPages !== 1 ? 's' : ''}`;
+          metaSpan.textContent = `${formatBytes(file.size)} • ${pdf.numPages} ${pdf.numPages !== 1 ? t('common.pages') : t('common.page')}`;
         })
         .catch((e) => {
           console.warn('Error loading PDF page count:', e);
@@ -93,13 +91,11 @@ async function convert() {
     showAlert('No File', 'Please upload a PDF file first.');
     return;
   }
-  showLoader('Converting to greyscale...');
   try {
-    const pdfBytes = (await readFileAsArrayBuffer(files[0])) as ArrayBuffer;
-    const pdfDoc = await PDFDocument.load(pdfBytes);
-    const pages = pdfDoc.getPages();
-
-    const pdfjsDoc = await getPDFDocument({ data: pdfBytes }).promise;
+    const result = await loadPdfWithPasswordPrompt(files[0], files, 0);
+    if (!result) return;
+    showLoader('Converting to greyscale...');
+    const { pdf: pdfjsDoc } = result;
     const newPdfDoc = await PDFDocument.create();
 
     for (let i = 1; i <= pdfjsDoc.numPages; i++) {
@@ -142,7 +138,7 @@ async function convert() {
     const resultBytes = await newPdfDoc.save();
     downloadFile(
       new Blob([new Uint8Array(resultBytes)], { type: 'application/pdf' }),
-      'greyscale.pdf'
+      files[0]?.name || 'document.pdf'
     );
     showAlert(
       'Success',

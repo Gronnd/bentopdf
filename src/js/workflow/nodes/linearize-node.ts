@@ -3,8 +3,8 @@ import { BaseWorkflowNode } from './base-node';
 import { pdfSocket } from '../sockets';
 import type { SocketData } from '../types';
 import { requirePdfInput, processBatch } from '../types';
-import { PDFDocument } from 'pdf-lib';
 import { initializeQpdf } from '../../utils/helpers.js';
+import { loadPdfDocument } from '../../utils/load-pdf-document.js';
 
 export class LinearizeNode extends BaseWorkflowNode {
   readonly category = 'Optimize & Repair' as const;
@@ -28,7 +28,7 @@ export class LinearizeNode extends BaseWorkflowNode {
     return {
       pdf: await processBatch(pdfInputs, async (input) => {
         const qpdf = await initializeQpdf();
-        const uid = `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const uid = `${Date.now()}_${crypto.randomUUID().slice(0, 7)}`;
         const inputPath = `/tmp/input_linearize_${uid}.pdf`;
         const outputPath = `/tmp/output_linearize_${uid}.pdf`;
 
@@ -50,7 +50,7 @@ export class LinearizeNode extends BaseWorkflowNode {
           }
         }
 
-        const document = await PDFDocument.load(resultBytes);
+        const document = await loadPdfDocument(resultBytes);
 
         return {
           type: 'pdf',

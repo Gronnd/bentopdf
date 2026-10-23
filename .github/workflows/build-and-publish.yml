@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run tests
+        run: npm run test:run
+
       - name: Build distribution
         run: npm run build
 
@@ -44,7 +47,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-${{ steps.version.outputs.version }}.zip
+          files: |
+            dist-${{ steps.version.outputs.version }}.zip
+            dist-simple-${{ steps.version.outputs.version }}.zip
           generate_release_notes: true
           draft: false
           prerelease: false

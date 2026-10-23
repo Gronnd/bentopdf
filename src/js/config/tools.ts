@@ -4,6 +4,13 @@ const baseCategories = [
     name: 'Popular Tools',
     tools: [
       {
+        href: import.meta.env.BASE_URL + 'edit-pdf-text.html',
+        name: 'Edit PDF Text',
+        icon: 'ph-cursor-text',
+        subtitle:
+          'Click any paragraph and edit it in place with live reflow, fonts, and styling.',
+      },
+      {
         href: import.meta.env.BASE_URL + 'pdf-workflow.html',
         name: 'PDF Workflow Builder',
         icon: 'ph-tree-structure',
@@ -15,7 +22,7 @@ const baseCategories = [
         name: 'PDF Multi Tool',
         icon: 'ph-pencil-ruler',
         subtitle:
-          'Merge, Split, Organize, Delete, Rotate, Add Blank Pages, Extract and Duplicate in an unified interface.',
+          'Merge, Split, Organize, Delete, Rotate, Add Blank Pages, Extract and Duplicate in a unified interface.',
       },
       {
         href: import.meta.env.BASE_URL + 'merge-pdf.html',
@@ -40,7 +47,7 @@ const baseCategories = [
         name: 'PDF Editor',
         icon: 'ph-pencil-simple',
         subtitle:
-          'Annotate, highlight, redact, comment, add shapes/images, search, and view PDFs',
+          'Annotate, highlight, redact, comment, add shapes/images, search, and view PDFs.',
       },
       {
         href: import.meta.env.BASE_URL + 'jpg-to-pdf.html',
@@ -91,6 +98,13 @@ const baseCategories = [
           'Annotate, highlight, redact, comment, add shapes/images, search, and view PDFs.',
       },
       {
+        href: import.meta.env.BASE_URL + 'edit-pdf-text.html',
+        name: 'Edit PDF Text',
+        icon: 'ph-cursor-text',
+        subtitle:
+          'Click any paragraph and edit it in place with live reflow, fonts, and styling.',
+      },
+      {
         href: import.meta.env.BASE_URL + 'bookmark.html',
         name: 'Edit Bookmarks',
         icon: 'ph-bookmark',
@@ -107,6 +121,13 @@ const baseCategories = [
         name: 'Page Numbers',
         icon: 'ph-list-numbers',
         subtitle: 'Insert page numbers into your document.',
+      },
+      {
+        href: import.meta.env.BASE_URL + 'add-page-labels.html',
+        name: 'Add Page Labels',
+        icon: 'ph-text-aa',
+        subtitle:
+          'Apply PDF page labels with Roman numerals, prefixes, and custom starts.',
       },
       {
         href: import.meta.env.BASE_URL + 'bates-numbering.html',
@@ -441,6 +462,13 @@ const baseCategories = [
         subtitle: 'Convert each PDF page into a TIFF image.',
       },
       {
+        href: import.meta.env.BASE_URL + 'pdf-to-cbz.html',
+        name: 'PDF to CBZ',
+        icon: 'ph-book-open',
+        subtitle:
+          'Convert a PDF into a CBZ (Comic Book Archive) file for comic readers.',
+      },
+      {
         href: import.meta.env.BASE_URL + 'pdf-to-svg.html',
         name: 'PDF to SVG',
         icon: 'ph-file-code',
@@ -471,7 +499,7 @@ const baseCategories = [
         subtitle: 'Convert PDF files to JSON format.',
       },
       {
-        href: import.meta.env.BASE_URL + 'pdf-to-docx.html',
+        href: import.meta.env.BASE_URL + 'pdf-to-word.html',
         name: 'PDF to Word',
         icon: 'ph-microsoft-word-logo',
         subtitle: 'Convert PDF files to editable Word documents.',
@@ -523,13 +551,26 @@ const baseCategories = [
         name: 'Alternate & Mix Pages',
         icon: 'ph-shuffle',
         subtitle:
-          'Merge PDFs by alternating pages from each PDF. Preserves Bookmarks',
+          'Merge PDFs by alternating pages from each PDF. Preserves Bookmarks.',
+      },
+      {
+        href: import.meta.env.BASE_URL + 'duplex-collate.html',
+        name: 'Duplex Collate',
+        icon: 'ph-arrows-vertical',
+        subtitle:
+          'Reorder front/back scan blocks into collated page order in one PDF.',
       },
       {
         href: import.meta.env.BASE_URL + 'organize-pdf.html',
         name: 'Organize & Duplicate',
         icon: 'ph-files',
         subtitle: 'Duplicate, reorder, and delete pages.',
+      },
+      {
+        href: import.meta.env.BASE_URL + 'overlay-pdf.html',
+        name: 'PDF Overlay',
+        icon: 'ph-stack-simple',
+        subtitle: 'Overlay or underlay pages from one PDF onto another.',
       },
       {
         href: import.meta.env.BASE_URL + 'add-attachments.html',
@@ -737,10 +778,10 @@ const baseCategories = [
     name: 'Secure PDF',
     tools: [
       {
-        href: import.meta.env.BASE_URL + 'encrypt-pdf.html',
-        name: 'Encrypt PDF',
+        href: import.meta.env.BASE_URL + 'protect-pdf.html',
+        name: 'Protect PDF',
         icon: 'ph-lock',
-        subtitle: 'Lock your PDF by adding a password.',
+        subtitle: 'Password protect a PDF with strong AES encryption.',
       },
       {
         href: import.meta.env.BASE_URL + 'sanitize-pdf.html',
@@ -749,10 +790,10 @@ const baseCategories = [
         subtitle: 'Remove metadata, annotations, scripts, and more.',
       },
       {
-        href: import.meta.env.BASE_URL + 'decrypt-pdf.html',
-        name: 'Decrypt PDF',
+        href: import.meta.env.BASE_URL + 'unlock-pdf.html',
+        name: 'Unlock PDF',
         icon: 'ph-lock-open',
-        subtitle: 'Unlock PDF by removing password protection.',
+        subtitle: 'Remove the password from a PDF so it opens freely.',
       },
       {
         href: import.meta.env.BASE_URL + 'flatten-pdf.html',
@@ -784,6 +825,13 @@ const baseCategories = [
         name: 'Validate Signature',
         icon: 'ph-seal-check',
         subtitle: 'Verify digital signatures and view certificate details.',
+      },
+      {
+        href: import.meta.env.BASE_URL + 'timestamp-pdf.html',
+        name: 'Timestamp PDF',
+        icon: 'ph-clock',
+        subtitle:
+          'Add an RFC 3161 document timestamp using a trusted TSA server.',
       },
     ],
   },

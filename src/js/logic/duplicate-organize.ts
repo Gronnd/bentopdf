@@ -1,15 +1,20 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
-import { downloadFile, getPDFDocument } from '../utils/helpers.js';
+import { downloadFile } from '../utils/helpers.js';
 import { state } from '../state.js';
-import { renderPagesProgressively, cleanupLazyRendering } from '../utils/render-utils.js';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
+import {
+  renderPagesProgressively,
+  cleanupLazyRendering,
+} from '../utils/render-utils.js';
 import Sortable from 'sortablejs';
 import { icons, createIcons } from 'lucide';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
+import '../utils/setup-pdf-worker.js';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
-
-const duplicateOrganizeState = {
+const duplicateOrganizeState: {
+  sortableInstances: { pageGrid?: Sortable };
+} = {
   sortableInstances: {},
 };
 
@@ -17,13 +22,10 @@ function initializePageGridSortable() {
   const grid = document.getElementById('page-grid');
   if (!grid) return;
 
-  // @ts-expect-error TS(2339) FIXME: Property 'pageGrid' does not exist on type '{}'.
   if (duplicateOrganizeState.sortableInstances.pageGrid) {
-    // @ts-expect-error TS(2339) FIXME: Property 'pageGrid' does not exist on type '{}'.
     duplicateOrganizeState.sortableInstances.pageGrid.destroy();
   }
 
-  // @ts-expect-error TS(2339) FIXME: Property 'pageGrid' does not exist on type '{}'.
   duplicateOrganizeState.sortableInstances.pageGrid = Sortable.create(grid, {
     animation: 150,
     ghostClass: 'sortable-ghost',
@@ -31,10 +33,10 @@ function initializePageGridSortable() {
     dragClass: 'sortable-drag',
     filter: '.duplicate-btn, .delete-btn',
     preventOnFilter: true,
-    onStart: function (evt: any) {
+    onStart: function (evt: Sortable.SortableEvent) {
       evt.item.style.opacity = '0.5';
     },
-    onEnd: function (evt: any) {
+    onEnd: function (evt: Sortable.SortableEvent) {
       evt.item.style.opacity = '1';
     },
   });
@@ -44,7 +46,7 @@ function initializePageGridSortable() {
  * Attaches event listeners for duplicate and delete to a page thumbnail element.
  * @param {HTMLElement} element The thumbnail element to attach listeners to.
  */
-function attachEventListeners(element: any) {
+function attachEventListeners(element: HTMLElement) {
   // Re-number all visible page labels
   const renumberPages = () => {
     const grid = document.getElementById('page-grid');
@@ -58,16 +60,16 @@ function attachEventListeners(element: any) {
   // Duplicate button listener
   element
     .querySelector('.duplicate-btn')
-    .addEventListener('click', (e: any) => {
+    .addEventListener('click', (e: Event) => {
       e.stopPropagation();
-      const clone = element.cloneNode(true);
+      const clone = element.cloneNode(true) as HTMLElement;
       element.after(clone);
       attachEventListeners(clone);
       renumberPages();
       initializePageGridSortable();
     });
 
-  element.querySelector('.delete-btn').addEventListener('click', (e: any) => {
+  element.querySelector('.delete-btn').addEventListener('click', (e: Event) => {
     e.stopPropagation();
     if (document.getElementById('page-grid').children.length > 1) {
       element.remove();
@@ -91,7 +93,15 @@ export async function renderDuplicateOrganizeThumbnails() {
 
   showLoader('Rendering page previews...');
   const pdfData = await state.pdfDoc.save();
-  const pdfjsDoc = await getPDFDocument({ data: pdfData }).promise;
+  hideLoader();
+  const loadResult = await loadPdfWithPasswordPrompt(
+    state.files[0],
+    state.files,
+    0
+  );
+  if (!loadResult) return;
+  showLoader('Rendering page previews...');
+  const pdfjsDoc = loadResult.pdf;
 
   grid.textContent = '';
 
@@ -148,22 +158,17 @@ export async function renderDuplicateOrganizeThumbnails() {
 
   try {
     // Render pages progressively with lazy loading
-    await renderPagesProgressively(
-      pdfjsDoc,
-      grid,
-      createWrapper,
-      {
-        batchSize: 8,
-        useLazyLoading: true,
-        lazyLoadMargin: '400px',
-        onProgress: (current, total) => {
-          showLoader(`Rendering page previews: ${current}/${total}`);
-        },
-        onBatchComplete: () => {
-          createIcons({ icons });
-        }
-      }
-    );
+    await renderPagesProgressively(pdfjsDoc, grid, createWrapper, {
+      batchSize: 8,
+      useLazyLoading: true,
+      lazyLoadMargin: '400px',
+      onProgress: (current, total) => {
+        showLoader(`Rendering page previews: ${current}/${total}`);
+      },
+      onBatchComplete: () => {
+        createIcons({ icons });
+      },
+    });
 
     initializePageGridSortable();
   } catch (error) {
@@ -181,8 +186,10 @@ export async function processAndSave() {
     const finalPageElements = grid.querySelectorAll('.page-thumbnail');
 
     const finalIndices = Array.from(finalPageElements)
-      .map((el) => parseInt((el as HTMLElement).dataset.originalPageIndex || '', 10))
-      .filter(index => !isNaN(index) && index >= 0);
+      .map((el) =>
+        parseInt((el as HTMLElement).dataset.originalPageIndex || '', 10)
+      )
+      .filter((index) => !isNaN(index) && index >= 0);
 
     console.log('Saving PDF with indices:', finalIndices);
     console.log('Original PDF Page Count:', state.pdfDoc?.getPageCount());
@@ -195,24 +202,30 @@ export async function processAndSave() {
     const newPdfDoc = await PDFLibDocument.create();
 
     const totalPages = state.pdfDoc.getPageCount();
-    const invalidIndices = finalIndices.filter(i => i >= totalPages);
+    const invalidIndices = finalIndices.filter((i) => i >= totalPages);
     if (invalidIndices.length > 0) {
       console.error('Found invalid indices:', invalidIndices);
-      showAlert('Error', 'Some pages could not be processed. Please try again.');
+      showAlert(
+        'Error',
+        'Some pages could not be processed. Please try again.'
+      );
       return;
     }
 
     const copiedPages = await newPdfDoc.copyPages(state.pdfDoc, finalIndices);
-    copiedPages.forEach((page: any) => newPdfDoc.addPage(page));
+    copiedPages.forEach((page) => newPdfDoc.addPage(page));
 
     const newPdfBytes = await newPdfDoc.save();
     downloadFile(
       new Blob([new Uint8Array(newPdfBytes)], { type: 'application/pdf' }),
-      'organized.pdf'
+      state.files[0]?.name || 'document.pdf'
     );
   } catch (e) {
     console.error('Save error:', e);
-    showAlert('Error', 'Failed to save the new PDF. Check console for details.');
+    showAlert(
+      'Error',
+      'Failed to save the new PDF. Check console for details.'
+    );
   } finally {
     hideLoader();
   }

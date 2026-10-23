@@ -2,9 +2,8 @@ import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { downloadFile, formatBytes } from '../utils/helpers.js';
 import { state } from '../state.js';
 import { createIcons, icons } from 'lucide';
-import { isWasmAvailable, getWasmBaseUrl } from '../config/wasm-cdn-config.js';
-import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
-import { loadPyMuPDF, isPyMuPDFAvailable } from '../utils/pymupdf-loader.js';
+import { loadPyMuPDF } from '../utils/pymupdf-loader.js';
+import { deduplicateFileName } from '../utils/deduplicate-filename.js';
 
 const FILETYPE = 'xps';
 const EXTENSIONS = ['.xps', '.oxps'];
@@ -114,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoader('Converting files...');
         const JSZip = (await import('jszip')).default;
         const zip = new JSZip();
+        const usedNames = new Set<string>();
 
         for (let i = 0; i < state.files.length; i++) {
           const file = state.files[i];
@@ -126,7 +126,11 @@ document.addEventListener('DOMContentLoaded', () => {
           });
           const baseName = file.name.replace(/\.[^.]+$/, '');
           const pdfBuffer = await pdfBlob.arrayBuffer();
-          zip.file(`${baseName}.pdf`, pdfBuffer);
+          const zipEntryName = deduplicateFileName(
+            `${baseName}.pdf`,
+            usedNames
+          );
+          zip.file(zipEntryName, pdfBuffer);
         }
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -141,12 +145,12 @@ document.addEventListener('DOMContentLoaded', () => {
           () => resetState()
         );
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(`[${TOOL_NAME}2PDF] ERROR:`, e);
       hideLoader();
       showAlert(
         'Error',
-        `An error occurred during conversion. Error: ${e.message}`
+        `An error occurred during conversion. Error: ${e instanceof Error ? e.message : String(e)}`
       );
     }
   };

@@ -5,17 +5,15 @@ import {
   formatBytes,
   getPDFDocument,
 } from '../utils/helpers.js';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
 import { state } from '../state.js';
 import { PDFDocument } from 'pdf-lib';
 import { createIcons, icons } from 'lucide';
 import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
 import { loadPyMuPDF, isPyMuPDFAvailable } from '../utils/pymupdf-loader.js';
 import * as pdfjsLib from 'pdfjs-dist';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+import type { PDFDocumentProxy } from 'pdfjs-dist';
+import '../utils/setup-pdf-worker.js';
 
 const CONDENSE_PRESETS = {
   light: {
@@ -83,7 +81,10 @@ async function performCondenseCompression(
     scrub: {
       metadata: customSettings?.removeMetadata ?? preset.scrub.metadata,
       thumbnails: customSettings?.removeThumbnails ?? preset.scrub.thumbnails,
-      xmlMetadata: (preset.scrub as any).xmlMetadata ?? false,
+      xmlMetadata:
+        'xmlMetadata' in preset.scrub
+          ? (preset.scrub as { xmlMetadata: boolean }).xmlMetadata
+          : false,
     },
     subsetFonts: customSettings?.subsetFonts ?? preset.subsetFonts,
     save: {
@@ -97,8 +98,8 @@ async function performCondenseCompression(
   try {
     const result = await pymupdf.compressPdf(fileBlob, options);
     return result;
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     if (
       errorMessage.includes('PatternType') ||
       errorMessage.includes('pattern')
@@ -120,15 +121,27 @@ async function performCondenseCompression(
       return { ...result, usedFallback: true };
     }
 
-    throw new Error(`PDF compression failed: ${errorMessage}`);
+    throw new Error(`PDF compression failed: ${errorMessage}`, {
+      cause: error,
+    });
   }
 }
 
 async function performPhotonCompression(
   arrayBuffer: ArrayBuffer,
-  level: string
+  level: string,
+  file?: File
 ) {
-  const pdfJsDoc = await getPDFDocument({ data: arrayBuffer }).promise;
+  let pdfJsDoc: PDFDocumentProxy;
+  if (file) {
+    hideLoader();
+    const result = await loadPdfWithPasswordPrompt(file);
+    if (!result) return null;
+    showLoader('Running Photon compression...');
+    pdfJsDoc = result.pdf;
+  } else {
+    pdfJsDoc = await getPDFDocument({ data: arrayBuffer }).promise;
+  }
   const newPdfDoc = await PDFDocument.create();
   const settings =
     PHOTON_PRESETS[level as keyof typeof PHOTON_PRESETS] ||
@@ -418,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
           usedMethod = 'Condense';
 
           // Check if fallback was used
-          if ((result as any).usedFallback) {
+          if ((result as { usedFallback?: boolean }).usedFallback) {
             usedMethod +=
               ' (without image optimization due to unsupported patterns)';
           }
@@ -429,8 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
           )) as ArrayBuffer;
           const resultBytes = await performPhotonCompression(
             arrayBuffer,
-            level
+            level,
+            originalFile
           );
+          if (!resultBytes) return;
           const buffer = resultBytes.buffer.slice(
             resultBytes.byteOffset,
             resultBytes.byteOffset + resultBytes.byteLength
@@ -446,10 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const savingsPercent =
           savings > 0 ? ((savings / originalFile.size) * 100).toFixed(1) : 0;
 
-        downloadFile(
-          resultBlob,
-          originalFile.name.replace(/\.pdf$/i, '') + '_compressed.pdf'
-        );
+        downloadFile(resultBlob, originalFile.name);
 
         hideLoader();
 
@@ -494,12 +506,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const arrayBuffer = (await readFileAsArrayBuffer(
               file
             )) as ArrayBuffer;
-            resultBytes = await performPhotonCompression(arrayBuffer, level);
+            const photonResult = await performPhotonCompression(
+              arrayBuffer,
+              level,
+              file
+            );
+            if (!photonResult) return;
+            resultBytes = photonResult;
           }
 
           totalCompressedSize += resultBytes.length;
-          const baseName = file.name.replace(/\.pdf$/i, '');
-          zip.file(`${baseName}_compressed.pdf`, resultBytes);
+          zip.file(file.name, resultBytes);
         }
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -529,12 +546,12 @@ document.addEventListener('DOMContentLoaded', () => {
           );
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       hideLoader();
       console.error('[CompressPDF] Error:', e);
       showAlert(
         'Error',
-        `An error occurred during compression. Error: ${e.message}`
+        `An error occurred during compression. Error: ${e instanceof Error ? e.message : String(e)}`
       );
     }
   };

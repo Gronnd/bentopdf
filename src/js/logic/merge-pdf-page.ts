@@ -1,10 +1,7 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
-import {
-  downloadFile,
-  readFileAsArrayBuffer,
-  getPDFDocument,
-} from '../utils/helpers.js';
+import { downloadFile } from '../utils/helpers.js';
 import { state } from '../state.js';
+import { batchDecryptIfNeeded } from '../utils/password-prompt.js';
 import {
   renderPagesProgressively,
   cleanupLazyRendering,
@@ -19,15 +16,11 @@ import {
 import { createIcons, icons } from 'lucide';
 import * as pdfjsLib from 'pdfjs-dist';
 import Sortable from 'sortablejs';
-
-// @ts-ignore
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+import type { MergeJob, MergeFile, MergeMessage, MergeResponse } from '@/types';
+import '../utils/setup-pdf-worker.js';
 
 interface MergeState {
-  pdfDocs: Record<string, any>;
+  pdfDocs: Record<string, pdfjsLib.PDFDocumentProxy>;
   pdfBytes: Record<string, ArrayBuffer>;
   activeMode: 'file' | 'page';
   sortableInstances: {
@@ -69,10 +62,10 @@ function initializeFileListSortable() {
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
-    onStart: function (evt: any) {
+    onStart: function (evt: Sortable.SortableEvent) {
       evt.item.style.opacity = '0.5';
     },
-    onEnd: function (evt: any) {
+    onEnd: function (evt: Sortable.SortableEvent) {
       evt.item.style.opacity = '1';
     },
   });
@@ -91,10 +84,10 @@ function initializePageThumbnailsSortable() {
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
-    onStart: function (evt: any) {
+    onStart: function (evt: Sortable.SortableEvent) {
       evt.item.style.opacity = '0.5';
     },
-    onEnd: function (evt: any) {
+    onEnd: function (evt: Sortable.SortableEvent) {
       evt.item.style.opacity = '1';
     },
   });
@@ -131,8 +124,9 @@ async function renderPageMergeThumbnails() {
   cleanupLazyRendering();
 
   let totalPages = 0;
-  for (const file of state.files) {
-    const doc = mergeState.pdfDocs[file.name];
+  for (let i = 0; i < state.files.length; i++) {
+    const fileKey = `${i}_${state.files[i].name}`;
+    const doc = mergeState.pdfDocs[fileKey];
     if (doc) totalPages += doc.numPages;
   }
 
@@ -143,12 +137,13 @@ async function renderPageMergeThumbnails() {
     const createWrapper = (
       canvas: HTMLCanvasElement,
       pageNumber: number,
-      fileName?: string
+      fileKey: string,
+      displayName: string
     ) => {
       const wrapper = document.createElement('div');
       wrapper.className =
         'page-thumbnail relative cursor-move flex flex-col items-center gap-1 p-2 border-2 border-gray-600 hover:border-indigo-500 rounded-lg bg-gray-700 transition-colors';
-      wrapper.dataset.fileName = fileName || '';
+      wrapper.dataset.fileName = fileKey;
       wrapper.dataset.pageIndex = (pageNumber - 1).toString();
 
       const imgContainer = document.createElement('div');
@@ -168,29 +163,29 @@ async function renderPageMergeThumbnails() {
       const fileNamePara = document.createElement('p');
       fileNamePara.className =
         'text-xs text-gray-400 truncate w-full text-center';
-      const fullTitle = fileName
-        ? `${fileName} (page ${pageNumber})`
+      const fullTitle = displayName
+        ? `${displayName} (page ${pageNumber})`
         : `Page ${pageNumber}`;
       fileNamePara.title = fullTitle;
-      fileNamePara.textContent = fileName
-        ? `${fileName.substring(0, 10)}... (p${pageNumber})`
+      fileNamePara.textContent = displayName
+        ? `${displayName.substring(0, 10)}... (p${pageNumber})`
         : `Page ${pageNumber}`;
 
       wrapper.append(imgContainer, fileNamePara);
       return wrapper;
     };
 
-    // Render pages from all files progressively
-    for (const file of state.files) {
-      const pdfjsDoc = mergeState.pdfDocs[file.name];
+    for (let idx = 0; idx < state.files.length; idx++) {
+      const file = state.files[idx];
+      const fileKey = `${idx}_${file.name}`;
+      const pdfjsDoc = mergeState.pdfDocs[fileKey];
       if (!pdfjsDoc) continue;
 
-      // Create a wrapper function that includes the file name
       const createWrapperWithFileName = (
         canvas: HTMLCanvasElement,
         pageNumber: number
       ) => {
-        return createWrapper(canvas, pageNumber, file.name);
+        return createWrapper(canvas, pageNumber, fileKey, file.name);
       };
 
       // Render pages progressively with lazy loading
@@ -202,7 +197,7 @@ async function renderPageMergeThumbnails() {
           batchSize: 8,
           useLazyLoading: true,
           lazyLoadMargin: '300px',
-          onProgress: (current, total) => {
+          onProgress: () => {
             currentPageNumber++;
             showLoader(`Rendering page previews...`);
           },
@@ -289,9 +284,7 @@ export async function merge() {
 
   showLoader('Merging PDFs...');
   try {
-    // @ts-ignore
     const jobs: MergeJob[] = [];
-    // @ts-ignore
     const filesToMerge: MergeFile[] = [];
     const uniqueFileNames = new Set<string>();
 
@@ -299,32 +292,27 @@ export async function merge() {
       const fileList = document.getElementById('file-list');
       if (!fileList) throw new Error('File list not found');
 
-      const sortedFiles = Array.from(fileList.children)
-        .map((li) => {
-          return state.files.find(
-            (f) => f.name === (li as HTMLElement).dataset.fileName
-          );
-        })
-        .filter(Boolean);
+      const sortedFileKeys = Array.from(fileList.children)
+        .map((li) => (li as HTMLElement).dataset.fileName)
+        .filter((key): key is string => !!key);
 
-      for (const file of sortedFiles) {
-        if (!file) continue;
-        const safeFileName = file.name.replace(/[^a-zA-Z0-9]/g, '_');
+      for (const fileKey of sortedFileKeys) {
+        const safeFileName = fileKey.replace(/[^a-zA-Z0-9]/g, '_');
         const rangeInput = document.getElementById(
           `range-${safeFileName}`
         ) as HTMLInputElement;
 
-        uniqueFileNames.add(file.name);
+        uniqueFileNames.add(fileKey);
 
         if (rangeInput && rangeInput.value.trim()) {
           jobs.push({
-            fileName: file.name,
+            fileName: fileKey,
             rangeType: 'specific',
             rangeString: rangeInput.value.trim(),
           });
         } else {
           jobs.push({
-            fileName: file.name,
+            fileName: fileKey,
             rangeType: 'all',
           });
         }
@@ -393,12 +381,21 @@ export async function merge() {
       }
     }
 
-    // @ts-ignore
+    const retainCheckbox = document.getElementById(
+      'retain-page-labels'
+    ) as HTMLInputElement | null;
+
+    const removeDuplicateFontsCheckbox = document.getElementById(
+      'remove-duplicate-fonts'
+    ) as HTMLInputElement | null;
+
     const message: MergeMessage = {
       command: 'merge',
       files: filesToMerge,
       jobs: jobs,
       cpdfUrl: WasmProvider.getUrl('cpdf')! + 'coherentpdf.browser.min.js',
+      retainPageLabels: retainCheckbox?.checked ?? false,
+      removeDuplicateFonts: removeDuplicateFontsCheckbox?.checked ?? false,
     };
 
     mergeWorker.postMessage(
@@ -406,7 +403,6 @@ export async function merge() {
       filesToMerge.map((f) => f.data)
     );
 
-    // @ts-ignore
     mergeWorker.onmessage = (e: MessageEvent<MergeResponse>) => {
       hideLoader();
       if (e.data.status === 'success') {
@@ -456,13 +452,23 @@ export async function refreshMergeUI() {
     mergeState.pdfDocs = {};
     mergeState.pdfBytes = {};
 
-    for (const file of state.files) {
-      const pdfBytes = await readFileAsArrayBuffer(file);
-      mergeState.pdfBytes[file.name] = pdfBytes as ArrayBuffer;
+    hideLoader();
+    state.files = await batchDecryptIfNeeded(state.files);
+    showLoader('Loading PDF documents...');
 
-      const bytesForPdfJs = (pdfBytes as ArrayBuffer).slice(0);
-      const pdfjsDoc = await getPDFDocument({ data: bytesForPdfJs }).promise;
-      mergeState.pdfDocs[file.name] = pdfjsDoc;
+    for (let i = 0; i < state.files.length; i++) {
+      const file = state.files[i];
+      const fileKey = `${i}_${file.name}`;
+
+      const bytes = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+      mergeState.pdfBytes[fileKey] = bytes;
+      mergeState.pdfDocs[fileKey] = pdf;
+    }
+
+    if (state.files.length === 0) {
+      hideLoader();
+      return;
     }
   } catch (error) {
     console.error('Error loading PDFs:', error);
@@ -483,14 +489,15 @@ export async function refreshMergeUI() {
 
   fileList.textContent = ''; // Clear list safely
   (state.files as File[]).forEach((f, index) => {
-    const doc = mergeState.pdfDocs[f.name];
+    const fileKey = `${index}_${f.name}`;
+    const doc = mergeState.pdfDocs[fileKey];
     const pageCount = doc ? doc.numPages : 'N/A';
-    const safeFileName = f.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeFileName = fileKey.replace(/[^a-zA-Z0-9]/g, '_');
 
     const li = document.createElement('li');
     li.className =
       'bg-gray-700 p-3 rounded-lg border border-gray-600 hover:border-indigo-500 transition-colors';
-    li.dataset.fileName = f.name;
+    li.dataset.fileName = fileKey;
 
     const mainDiv = document.createElement('div');
     mainDiv.className = 'flex items-center justify-between';

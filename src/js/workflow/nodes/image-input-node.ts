@@ -1,9 +1,14 @@
 import { ClassicPreset } from 'rete';
 import { BaseWorkflowNode } from './base-node';
-import { pdfSocket } from '../sockets';
-import type { PDFData, SocketData } from '../types';
-import { PDFDocument } from 'pdf-lib';
-import { loadPyMuPDF } from '../../utils/pymupdf-loader.js';
+import { pdfSocket } from '@/js/workflow/sockets';
+import type { PDFData, SocketData } from '@/js/workflow/types';
+import { loadPyMuPDF } from '@/js/utils/pymupdf-loader.js';
+import { loadPdfDocument } from '@/js/utils/load-pdf-document.js';
+import {
+  isValidImageFile,
+  preprocessImageFile,
+} from '@/js/utils/image-input-utils.js';
+import { wfError } from '@/js/workflow/errors';
 
 export class ImageInputNode extends BaseWorkflowNode {
   readonly category = 'Input' as const;
@@ -19,7 +24,7 @@ export class ImageInputNode extends BaseWorkflowNode {
 
   async addFiles(fileList: File[]): Promise<void> {
     for (const file of fileList) {
-      if (file.type.startsWith('image/')) {
+      if (isValidImageFile(file)) {
         this.files.push(file);
       }
     }
@@ -51,13 +56,18 @@ export class ImageInputNode extends BaseWorkflowNode {
     _inputs: Record<string, SocketData[]>
   ): Promise<Record<string, SocketData>> {
     if (this.files.length === 0) {
-      throw new Error('No images uploaded in Image Input node');
+      throw new Error(wfError('noImagesUploaded'));
+    }
+
+    const processedFiles: File[] = [];
+    for (const file of this.files) {
+      processedFiles.push(await preprocessImageFile(file));
     }
 
     const pymupdf = await loadPyMuPDF();
-    const pdfBlob = await pymupdf.imagesToPdf(this.files);
+    const pdfBlob = await pymupdf.imagesToPdf(processedFiles);
     const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
-    const document = await PDFDocument.load(bytes);
+    const document = await loadPdfDocument(bytes);
 
     const result: PDFData = {
       type: 'pdf',

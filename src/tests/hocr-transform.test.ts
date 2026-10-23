@@ -8,7 +8,9 @@ import {
   normalizeText,
   calculateWordTransform,
   calculateSpaceTransform,
+  calculateLineFontSize,
 } from '../js/utils/hocr-transform';
+import type { OcrWord } from '@/types';
 
 describe('hocr-transform', () => {
   describe('parseBBox', () => {
@@ -210,7 +212,7 @@ describe('hocr-transform', () => {
       bbox: { x0: 0, y0: 100, x1: 500, y1: 130 },
       baseline: { slope: 0, intercept: 0 },
       textangle: 0,
-      words: [],
+      words: [] as OcrWord[],
       direction: 'ltr' as const,
       injectWordBreaks: true,
     };
@@ -297,12 +299,38 @@ describe('hocr-transform', () => {
     });
   });
 
+  describe('calculateLineFontSize', () => {
+    it('returns line height + baseline intercept', () => {
+      const line = {
+        bbox: { x0: 0, y0: 100, x1: 500, y1: 130 },
+        baseline: { slope: 0, intercept: 2 },
+        textangle: 0,
+        words: [] as OcrWord[],
+        direction: 'ltr' as const,
+        injectWordBreaks: true,
+      };
+      expect(calculateLineFontSize(line)).toBe(32);
+    });
+
+    it('clamps to a minimum of 1 for degenerate lines', () => {
+      const line = {
+        bbox: { x0: 0, y0: 0, x1: 0, y1: 0 },
+        baseline: { slope: 0, intercept: 0 },
+        textangle: 0,
+        words: [] as OcrWord[],
+        direction: 'ltr' as const,
+        injectWordBreaks: true,
+      };
+      expect(calculateLineFontSize(line)).toBe(1);
+    });
+  });
+
   describe('calculateSpaceTransform', () => {
     const baseLine = {
       bbox: { x0: 0, y0: 100, x1: 500, y1: 130 },
       baseline: { slope: 0, intercept: 0 },
       textangle: 0,
-      words: [],
+      words: [] as OcrWord[],
       direction: 'ltr' as const,
       injectWordBreaks: true,
     };

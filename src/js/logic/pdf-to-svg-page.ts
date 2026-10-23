@@ -2,11 +2,12 @@ import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { downloadFile, formatBytes } from '../utils/helpers.js';
 import { createIcons, icons } from 'lucide';
 import JSZip from 'jszip';
-import { isWasmAvailable, getWasmBaseUrl } from '../config/wasm-cdn-config.js';
-import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
 import { loadPyMuPDF, isPyMuPDFAvailable } from '../utils/pymupdf-loader.js';
+import type { PyMuPDFInstance } from '@/types';
+import { batchDecryptIfNeeded } from '../utils/password-prompt.js';
+import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
 
-let pymupdf: any = null;
+let pymupdf: PyMuPDFInstance | null = null;
 let files: File[] = [];
 
 const updateUI = () => {
@@ -86,6 +87,10 @@ async function convert() {
     if (!pymupdf) {
       pymupdf = await loadPyMuPDF();
     }
+
+    hideLoader();
+    files = await batchDecryptIfNeeded(files);
+    showLoader('Converting to SVG...');
 
     const isSingleFile = files.length === 1;
 

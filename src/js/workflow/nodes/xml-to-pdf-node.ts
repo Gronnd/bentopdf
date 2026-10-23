@@ -2,8 +2,9 @@ import { ClassicPreset } from 'rete';
 import { BaseWorkflowNode } from './base-node';
 import { pdfSocket } from '../sockets';
 import type { PDFData, SocketData, MultiPDFData } from '../types';
-import { PDFDocument } from 'pdf-lib';
 import { loadPyMuPDF } from '../../utils/pymupdf-loader.js';
+import { loadPdfDocument } from '../../utils/load-pdf-document.js';
+import { wfError } from '../errors';
 
 export class XmlToPdfNode extends BaseWorkflowNode {
   readonly category = 'Input' as const;
@@ -46,8 +47,7 @@ export class XmlToPdfNode extends BaseWorkflowNode {
   async data(
     _inputs: Record<string, SocketData[]>
   ): Promise<Record<string, SocketData>> {
-    if (this.files.length === 0)
-      throw new Error('No XML files uploaded in XML Input node');
+    if (this.files.length === 0) throw new Error(wfError('noXmlUploaded'));
 
     const pymupdf = await loadPyMuPDF();
     const results: PDFData[] = [];
@@ -59,7 +59,7 @@ export class XmlToPdfNode extends BaseWorkflowNode {
         pageSize: 'a4',
       });
       const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
-      const pdfDoc = await PDFDocument.load(bytes);
+      const pdfDoc = await loadPdfDocument(bytes);
       results.push({
         type: 'pdf',
         document: pdfDoc,

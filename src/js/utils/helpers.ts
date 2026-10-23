@@ -1,8 +1,11 @@
 import createModule from '@neslinesli93/qpdf-wasm';
+import type { QpdfInstanceExtended } from '@/types';
 import { showLoader, hideLoader, showAlert } from '../ui.js';
 import { createIcons } from 'lucide';
 import { state, resetState } from '../state.js';
 import * as pdfjsLib from 'pdfjs-dist';
+import DOMPurify from 'dompurify';
+import type { DocumentInitParameters } from 'pdfjs-dist/types/src/display/api';
 
 const STANDARD_SIZES = {
   A4: { width: 595.28, height: 841.89 },
@@ -13,7 +16,7 @@ const STANDARD_SIZES = {
   A5: { width: 419.53, height: 595.28 },
 };
 
-export function getStandardPageName(width: any, height: any) {
+export function getStandardPageName(width: number, height: number) {
   const tolerance = 1; // Allow for minor floating point variations
   for (const [name, size] of Object.entries(STANDARD_SIZES)) {
     if (
@@ -28,8 +31,8 @@ export function getStandardPageName(width: any, height: any) {
   return 'Custom';
 }
 
-export function convertPoints(points: any, unit: any) {
-  let result = 0;
+export function convertPoints(points: number, unit: string) {
+  let result: number;
   switch (unit) {
     case 'in':
       result = points / 72;
@@ -59,7 +62,7 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } {
     : { r: 0, g: 0, b: 0 };
 }
 
-export const formatBytes = (bytes: any, decimals = 1) => {
+export const formatBytes = (bytes: number, decimals = 1) => {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
@@ -79,10 +82,12 @@ export const downloadFile = (blob: Blob, filename: string): void => {
   URL.revokeObjectURL(url);
 };
 
-export const readFileAsArrayBuffer = (file: any) => {
+export const readFileAsArrayBuffer = (
+  file: Blob
+): Promise<ArrayBuffer | null> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => resolve(reader.result as ArrayBuffer | null);
     reader.onerror = (error) => reject(error);
     reader.readAsArrayBuffer(file);
   });
@@ -139,7 +144,7 @@ export function parsePageRanges(
  * @param {string} isoDateString - The ISO 8601 date string.
  * @returns {string} A localized date and time string, or the original string if parsing fails.
  */
-export function formatIsoDate(isoDateString) {
+export function formatIsoDate(isoDateString: string) {
   if (!isoDateString || typeof isoDateString !== 'string') {
     return isoDateString; // Return original value if it's not a valid string
   }
@@ -156,20 +161,20 @@ export function formatIsoDate(isoDateString) {
   }
 }
 
-let qpdfInstance: any = null;
+let qpdfInstance: QpdfInstanceExtended | null = null;
 
 /**
  * Initialize qpdf-wasm singleton.
  * Subsequent calls return the same instance.
  */
-export async function initializeQpdf() {
+export async function initializeQpdf(): Promise<QpdfInstanceExtended> {
   if (qpdfInstance) return qpdfInstance;
 
   showLoader('Initializing PDF engine...');
   try {
-    qpdfInstance = await createModule({
+    qpdfInstance = (await createModule({
       locateFile: () => import.meta.env.BASE_URL + 'qpdf.wasm',
-    });
+    })) as unknown as QpdfInstanceExtended;
   } catch (error) {
     console.error('Failed to initialize qpdf-wasm:', error);
     showAlert(
@@ -267,24 +272,19 @@ export function resetAndReloadTool(preResetCallback?: () => void) {
  * @param src The source to load (url string, typed array, or parameters object)
  * @returns The PDF loading task
  */
-export function getPDFDocument(src: any) {
-  let params = src;
+export function getPDFDocument(
+  src: string | Uint8Array | ArrayBuffer | DocumentInitParameters
+) {
+  let params: DocumentInitParameters;
 
-  // Handle different input types similar to how getDocument handles them,
-  // but we ensure we have an object to attach wasmUrl to.
   if (typeof src === 'string') {
     params = { url: src };
   } else if (src instanceof Uint8Array || src instanceof ArrayBuffer) {
     params = { data: src };
+  } else {
+    params = src;
   }
 
-  // Ensure params is an object
-  if (typeof params !== 'object' || params === null) {
-    params = {};
-  }
-
-  // Add wasmUrl pointing to our public/wasm directory
-  // This is required for PDF.js v5+ to load OpenJPEG for certain images
   return pdfjsLib.getDocument({
     ...params,
     wasmUrl: import.meta.env.BASE_URL + 'pdfjs-viewer/wasm/',
@@ -320,34 +320,35 @@ export function uint8ArrayToBase64(bytes: Uint8Array): string {
 export function sanitizeEmailHtml(html: string): string {
   if (!html) return html;
 
-  let sanitized = html;
+  let sanitized = DOMPurify.sanitize(html, {
+    FORBID_TAGS: ['style', 'link', 'script', 'iframe', 'object', 'embed'],
+    FORBID_ATTR: ['style'],
+    ALLOW_DATA_ATTR: false,
+  });
 
-  sanitized = sanitized.replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
-  sanitized = sanitized.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-  sanitized = sanitized.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-  sanitized = sanitized.replace(/<link[^>]*>/gi, '');
-  sanitized = sanitized.replace(/\s+style=["'][^"']*["']/gi, '');
-  sanitized = sanitized.replace(/\s+class=["'][^"']*["']/gi, '');
-  sanitized = sanitized.replace(/\s+data-[a-z-]+=["'][^"']*["']/gi, '');
-  sanitized = sanitized.replace(
-    /<img[^>]*(?:width=["']1["'][^>]*height=["']1["']|height=["']1["'][^>]*width=["']1["'])[^>]*\/?>/gi,
-    ''
-  );
   sanitized = sanitized.replace(
     /href=["']https?:\/\/[^"']*safelinks\.protection\.outlook\.com[^"']*url=([^&"']+)[^"']*["']/gi,
     (match, encodedUrl) => {
       try {
         const decodedUrl = decodeURIComponent(encodedUrl);
-        return `href="${decodedUrl}"`;
+        let parsed: URL;
+        try {
+          parsed = new URL(decodedUrl);
+        } catch {
+          return match;
+        }
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return match;
+        }
+        return `href="${escapeHtml(decodedUrl)}"`;
       } catch {
         return match;
       }
     }
   );
-  sanitized = sanitized.replace(/\s+originalsrc=["'][^"']*["']/gi, '');
   sanitized = sanitized.replace(
     /href=["']([^"']{500,})["']/gi,
-    (match, url) => {
+    (_match, url: string) => {
       const baseUrl = url.split('?')[0];
       if (baseUrl && baseUrl.length < 200) {
         return `href="${baseUrl}"`;
@@ -355,15 +356,12 @@ export function sanitizeEmailHtml(html: string): string {
       return `href="${url.substring(0, 200)}"`;
     }
   );
-
   sanitized = sanitized.replace(
-    /\s+(cellpadding|cellspacing|bgcolor|border|valign|align|width|height|role|dir|id)=["'][^"']*["']/gi,
+    /<img[^>]*(?:width=["']1["'][^>]*height=["']1["']|height=["']1["'][^>]*width=["']1["'])[^>]*\/?>/gi,
     ''
   );
   sanitized = sanitized.replace(/<\/?table[^>]*>/gi, '<div>');
-  sanitized = sanitized.replace(/<\/?tbody[^>]*>/gi, '');
-  sanitized = sanitized.replace(/<\/?thead[^>]*>/gi, '');
-  sanitized = sanitized.replace(/<\/?tfoot[^>]*>/gi, '');
+  sanitized = sanitized.replace(/<\/?(tbody|thead|tfoot)[^>]*>/gi, '');
   sanitized = sanitized.replace(/<tr[^>]*>/gi, '<div>');
   sanitized = sanitized.replace(/<\/tr>/gi, '</div>');
   sanitized = sanitized.replace(/<td[^>]*>/gi, '<span> ');
@@ -374,10 +372,6 @@ export function sanitizeEmailHtml(html: string): string {
   sanitized = sanitized.replace(/<span>\s*<\/span>/gi, '');
   sanitized = sanitized.replace(/(<div>)+/gi, '<div>');
   sanitized = sanitized.replace(/(<\/div>)+/gi, '</div>');
-  sanitized = sanitized.replace(
-    /<a[^>]*href=["']\s*["'][^>]*>([^<]*)<\/a>/gi,
-    '$1'
-  );
 
   const MAX_HTML_SIZE = 100000;
   if (sanitized.length > MAX_HTML_SIZE) {
@@ -413,7 +407,7 @@ export function formatRawDate(raw: string): string {
         year,
         hoursStr,
         minsStr,
-        secsStr,
+        _secsStr,
         timezone,
       ] = match;
 
@@ -455,8 +449,27 @@ export function formatRawDate(raw: string): string {
 
       return `${fullDay}, ${fullMonth} ${dom}, ${year} at ${hours}:${minsStr} ${ampm} (${formattedTz})`;
     }
-  } catch (e) {
-    // Fallback to raw string if parsing fails
+  } catch {
+    console.error('Error parsing date string:', raw);
   }
   return raw;
+}
+
+/**
+ * Returns a sanitized PDF filename.
+ *
+ * The provided filename is processed as follows:
+ * - Removes a trailing `.pdf` file extension (case-insensitive)
+ * - Trims leading and trailing whitespace
+ * - Truncates the name to a maximum of 80 characters
+ *
+ * @param filename The original filename (including extension)
+ * @returns The sanitized filename without the `.pdf` extension, limited to 80 characters
+ */
+export function getCleanPdfFilename(filename: string): string {
+  let clean = filename.replace(/\.pdf$/i, '').trim();
+  if (clean.length > 80) {
+    clean = clean.slice(0, 80);
+  }
+  return clean;
 }

@@ -1,11 +1,15 @@
 import i18next from 'i18next';
 import HttpBackend from 'i18next-http-backend';
+import { getStoredItem, setStoredItem } from '../utils/safe-storage.js';
+import enCommon from '../../../public/locales/en/common.json';
+import enTools from '../../../public/locales/en/tools.json';
 
 // Supported languages
 export const supportedLanguages = [
   'en',
   'ar',
   'be',
+  'ru',
   'fr',
   'de',
   'es',
@@ -16,9 +20,14 @@ export const supportedLanguages = [
   'id',
   'it',
   'pt',
+  'pl',
   'nl',
   'da',
   'sv',
+  'ko',
+  'ja',
+  'uk',
+  'sk',
 ] as const;
 export type SupportedLanguage = (typeof supportedLanguages)[number];
 
@@ -26,6 +35,7 @@ export const languageNames: Record<SupportedLanguage, string> = {
   en: 'English',
   ar: 'العربية',
   be: 'Беларуская',
+  ru: 'Русский',
   fr: 'Français',
   de: 'Deutsch',
   es: 'Español',
@@ -36,9 +46,14 @@ export const languageNames: Record<SupportedLanguage, string> = {
   id: 'Bahasa Indonesia',
   it: 'Italiano',
   pt: 'Português',
+  pl: 'Polski',
   nl: 'Nederlands',
   da: 'Dansk',
   sv: 'Svenska',
+  ko: '한국어',
+  ja: '日本語',
+  uk: 'Українська',
+  sk: 'Slovenčina',
 };
 
 export const getLanguageFromUrl = (): SupportedLanguage => {
@@ -54,7 +69,7 @@ export const getLanguageFromUrl = (): SupportedLanguage => {
   }
 
   const langMatch = path.match(
-    /^\/(en|ar|fr|es|de|zh|zh-TW|vi|tr|id|it|pt|nl|be|da)(?:\/|$)/
+    /^\/(en|ar|fr|es|de|zh|zh-TW|vi|tr|id|it|pt|nl|be|da|ko|sv|ru|ja|uk|sk)(?:\/|$)/
   );
   if (
     langMatch &&
@@ -63,7 +78,7 @@ export const getLanguageFromUrl = (): SupportedLanguage => {
     return langMatch[1] as SupportedLanguage;
   }
 
-  const storedLang = localStorage.getItem('i18nextLng');
+  const storedLang = getStoredItem('i18nextLng');
   if (
     storedLang &&
     supportedLanguages.includes(storedLang as SupportedLanguage)
@@ -71,7 +86,21 @@ export const getLanguageFromUrl = (): SupportedLanguage => {
     return storedLang as SupportedLanguage;
   }
 
-  const envLang = import.meta.env.VITE_DEFAULT_LANGUAGE;
+  // Check browser language preferences
+  if (typeof navigator !== 'undefined' && navigator.languages) {
+    for (const lang of navigator.languages) {
+      if (supportedLanguages.includes(lang as SupportedLanguage)) {
+        return lang as SupportedLanguage;
+      }
+
+      const primaryLang = lang.split('-')[0];
+      if (supportedLanguages.includes(primaryLang as SupportedLanguage)) {
+        return primaryLang as SupportedLanguage;
+      }
+    }
+  }
+
+  const envLang = import.meta.env?.VITE_DEFAULT_LANGUAGE;
   if (envLang && supportedLanguages.includes(envLang as SupportedLanguage)) {
     return envLang as SupportedLanguage;
   }
@@ -86,7 +115,7 @@ export const initI18n = async (): Promise<typeof i18next> => {
 
   const currentLang = getLanguageFromUrl();
 
-  localStorage.setItem('i18nextLng', currentLang);
+  setStoredItem('i18nextLng', currentLang);
 
   await i18next.use(HttpBackend).init({
     lng: currentLang,
@@ -95,6 +124,13 @@ export const initI18n = async (): Promise<typeof i18next> => {
     ns: ['common', 'tools'],
     defaultNS: 'common',
     preload: [currentLang],
+    partialBundledLanguages: true,
+    resources: {
+      en: {
+        common: enCommon,
+        tools: enTools,
+      },
+    },
     backend: {
       loadPath: `${import.meta.env.BASE_URL.replace(/\/?$/, '/')}locales/{{lng}}/{{ns}}.json`,
     },
@@ -115,7 +151,7 @@ export const t = (key: string, options?: Record<string, unknown>): string => {
 
 export const changeLanguage = (lang: SupportedLanguage): void => {
   if (!supportedLanguages.includes(lang)) return;
-  localStorage.setItem('i18nextLng', lang);
+  setStoredItem('i18nextLng', lang);
 
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   let relativePath = window.location.pathname;
@@ -130,7 +166,7 @@ export const changeLanguage = (lang: SupportedLanguage): void => {
 
   let pagePathWithoutLang = relativePath;
   const langPrefixMatch = relativePath.match(
-    /^\/(en|ar|fr|es|de|zh|zh-TW|vi|tr|id|it|pt|nl|be|da)(\/.*)?$/
+    /^\/(en|ar|fr|es|de|zh|zh-TW|vi|tr|id|it|pt|nl|be|da|ko|sv|ru|ja|uk|sk)(\/.*)?$/
   );
   if (langPrefixMatch) {
     pagePathWithoutLang = langPrefixMatch[2] || '/';
@@ -213,7 +249,9 @@ export const rewriteLinks = (): void => {
       href.startsWith('mailto:') ||
       href.startsWith('tel:') ||
       href.startsWith('#') ||
-      href.startsWith('javascript:')
+      href.startsWith('javascript:') ||
+      href.startsWith('data:') ||
+      href.startsWith('vbscript:')
     ) {
       return;
     }
@@ -223,7 +261,7 @@ export const rewriteLinks = (): void => {
     }
 
     const langPrefixRegex = new RegExp(
-      `^(${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})?/?(en|ar|fr|es|de|zh|zh-TW|vi|tr|id|it|pt|nl|be|da)(/|$)`
+      `^(${basePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})?/?(en|ar|fr|es|de|zh|zh-TW|vi|tr|id|it|pt|nl|be|da|ko|sv|ru|ja|uk|sk)(/|$)`
     );
     if (langPrefixRegex.test(href)) {
       return;

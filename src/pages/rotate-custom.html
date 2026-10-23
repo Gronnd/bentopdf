@@ -5,16 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!-- Primary Meta Tags -->
-    <title>Rotate Custom Online Free - Rotate Custom Tool | BentoPDF</title>
     <meta
       name="title"
       content="Rotate Custom Online Free - Rotate Custom Tool | BentoPDF"
     />
     <meta
       name="description"
-      content="★ Rotate Custom online free - Rotate custom PDFs easily ★ No signup ★ Unlimited files ★ Privacy-first ★ Works in browser ★ Fast & secure"
+      content="Rotate pages by any custom angle. Free, no uploads, no signup. Runs entirely in your browser."
     />
-    <meta name="keywords" content="rotate custom, rotate custom, online pdf" />
+    <meta name="keywords" content="rotate custom, online pdf" />
     <meta name="author" content="BentoPDF" />
     <meta
       name="robots"
@@ -22,7 +21,7 @@
     />
 
     <!-- Canonical URL -->
-    <link rel="canonical" href="https://www.bentopdf.com/rotate-custom.html" />
+    <link rel="canonical" href="https://www.bentopdf.com/rotate-custom" />
 
     <!-- Open Graph / Facebook / LinkedIn -->
     <meta property="og:type" content="website" />
@@ -33,7 +32,7 @@
     />
     <meta
       property="og:description"
-      content="★ Rotate Custom online free - Rotate custom PDFs easily ★ No signup ★ Unlimited files ★ Privacy-first ★ Works in browser ★ Fast & secure"
+      content="Rotate pages by any custom angle. Free, no uploads, no signup. Runs entirely in your browser."
     />
     <meta
       property="og:image"
@@ -49,7 +48,7 @@
     <meta name="twitter:title" content="Rotate Custom Free" />
     <meta
       name="twitter:description"
-      content="★ Rotate Custom online free - Rotate custom PDFs easily ★ No signup ★ Unlimited files ★ Privacy-first ★ Works in browser"
+      content="Rotate pages by any custom angle. Free, no uploads, no signup. Runs entirely in your browser."
     />
     <meta
       name="twitter:image"
@@ -63,10 +62,6 @@
     <meta name="apple-mobile-web-app-title" content="Rotate Custom" />
 
     <title>Rotate PDF by Custom Degrees - BentoPDF</title>
-    <meta
-      name="description"
-      content="Rotate PDF pages by any custom angle. Rotate individual pages or all pages at once. Free, secure, and runs entirely in your browser."
-    />
     <link href="/src/css/styles.css" rel="stylesheet" />
 
     <!-- Web App Manifest -->
@@ -107,7 +102,7 @@
       >
         <button
           id="back-to-tools"
-          class="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 mb-6 font-semibold"
+          class="flex items-center gap-2 text-indigo-300 hover:text-indigo-400 mb-6 font-semibold"
         >
           <i data-lucide="arrow-left" class="cursor-pointer"></i>
           <span class="cursor-pointer" data-i18n="tools.backToTools">
@@ -119,11 +114,10 @@
           class="text-2xl font-bold text-white mb-2"
           data-i18n="tools:rotateCustom.name"
         >
-          Rotate Custom Free Online - Fast & Secure
+          Rotate by Custom Degrees
         </h1>
         <p class="text-gray-400 mb-6" data-i18n="tools:rotateCustom.subtitle">
-          Rotate pages by any custom angle. Enter degrees (positive =
-          counter-clockwise, negative = clockwise).
+          Rotate pages by any custom angle.
         </p>
 
         <div
@@ -131,10 +125,7 @@
           class="relative flex flex-col items-center justify-center w-full h-48 md:h-64 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer bg-gray-900 hover:bg-gray-700 transition-colors duration-300"
         >
           <div class="flex flex-col items-center justify-center pt-5 pb-6">
-            <i
-              data-lucide="upload-cloud"
-              class="w-10 h-10 mb-3 text-gray-400"
-            ></i>
+            <i class="ph ph-upload-simple text-4xl mb-3 text-gray-400"></i>
             <p class="mb-2 text-sm text-gray-400">
               <span class="font-semibold" data-i18n="upload.clickToSelect"
                 >Click to select a file</span
@@ -178,6 +169,9 @@
                   id="batch-custom-angle"
                   type="number"
                   value="0"
+                  step="0.1"
+                  min="-360"
+                  max="360"
                   class="w-20 h-10 text-center bg-gray-700 border border-gray-600 text-white rounded-lg"
                 />
                 <button
@@ -199,7 +193,7 @@
           <!-- Page Thumbnails -->
           <div
             id="page-thumbnails"
-            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-4"
+            class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-4"
           ></div>
 
           <button id="process-btn" class="btn-gradient w-full mt-4">
@@ -309,36 +303,36 @@
           href="merge-pdf.html"
           class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700"
         >
-          <h3 class="text-white font-semibold mb-1">Merge Pdf</h3>
-          <p class="text-gray-400 text-sm">Free online merge pdf tool</p>
+          <h3 class="text-white font-semibold mb-1">Merge PDF</h3>
+          <p class="text-gray-400 text-sm">Free online merge PDF tool</p>
         </a>
         <a
           href="compress-pdf.html"
           class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700"
         >
-          <h3 class="text-white font-semibold mb-1">Compress Pdf</h3>
-          <p class="text-gray-400 text-sm">Free online compress pdf tool</p>
+          <h3 class="text-white font-semibold mb-1">Compress PDF</h3>
+          <p class="text-gray-400 text-sm">Free online compress PDF tool</p>
         </a>
         <a
           href="split-pdf.html"
           class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700"
         >
-          <h3 class="text-white font-semibold mb-1">Split Pdf</h3>
-          <p class="text-gray-400 text-sm">Free online split pdf tool</p>
+          <h3 class="text-white font-semibold mb-1">Split PDF</h3>
+          <p class="text-gray-400 text-sm">Free online split PDF tool</p>
         </a>
         <a
           href="edit-pdf.html"
           class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700"
         >
-          <h3 class="text-white font-semibold mb-1">Edit Pdf</h3>
-          <p class="text-gray-400 text-sm">Free online edit pdf tool</p>
+          <h3 class="text-white font-semibold mb-1">Edit PDF</h3>
+          <p class="text-gray-400 text-sm">Free online edit PDF tool</p>
         </a>
         <a
           href="rotate-pdf.html"
           class="block bg-gray-800 p-4 rounded-lg hover:bg-gray-700 transition-colors border border-gray-700"
         >
-          <h3 class="text-white font-semibold mb-1">Rotate Pdf</h3>
-          <p class="text-gray-400 text-sm">Free online rotate pdf tool</p>
+          <h3 class="text-white font-semibold mb-1">Rotate PDF</h3>
+          <p class="text-gray-400 text-sm">Free online rotate PDF tool</p>
         </a>
       </div>
     </section>
@@ -351,41 +345,101 @@
       >
         Frequently Asked Questions
       </h2>
-      <div class="space-y-4">
-        <details class="bg-gray-800 p-5 rounded-lg border border-gray-700">
-          <summary
-            class="cursor-pointer font-semibold text-white flex items-center justify-between"
-          >
-            Is rotate custom really free?
-            <i data-lucide="chevron-down" class="w-5 h-5"></i>
+      <div class="faq-list">
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            Can I rotate a PDF page by an angle other than 90 degrees?
+            <i data-lucide="plus" class="faq-d-icon"></i>
           </summary>
-          <p class="mt-3 text-gray-400">
-            Yes! BentoPDF is 100% free with no hidden fees, no signup required,
-            and unlimited file processing.
+          <p class="faq-d-a">
+            That's what this tool is for. Type any angle from -360 to 360
+            degrees, in steps of 0.1, into the box under a page and the
+            thumbnail turns to match; positive values rotate clockwise and
+            negative values counterclockwise.
           </p>
         </details>
-        <details class="bg-gray-800 p-5 rounded-lg border border-gray-700">
-          <summary
-            class="cursor-pointer font-semibold text-white flex items-center justify-between"
-          >
-            Are my files private and secure?
-            <i data-lucide="chevron-down" class="w-5 h-5"></i>
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            How do I straighten a slightly crooked scan?
+            <i data-lucide="plus" class="faq-d-icon"></i>
           </summary>
-          <p class="mt-3 text-gray-400">
-            Absolutely! All processing happens in your browser. Your files never
-            leave your device, ensuring complete privacy.
+          <p class="faq-d-a">
+            Enter a small correction such as 1.5 or -2 for the tilted page and
+            watch the preview until the lines of text look level, then click
+            Apply Rotations. If a whole scanned document is skewed,
+            <a href="/deskew-pdf" class="text-indigo-300 hover:text-indigo-400"
+              >Deskew PDF</a
+            >
+            detects and corrects the angle on every page automatically.
           </p>
         </details>
-        <details class="bg-gray-800 p-5 rounded-lg border border-gray-700">
-          <summary
-            class="cursor-pointer font-semibold text-white flex items-center justify-between"
-          >
-            Is there a file size limit?
-            <i data-lucide="chevron-down" class="w-5 h-5"></i>
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            What happens to the page size when I rotate by an odd angle?
+            <i data-lucide="plus" class="faq-d-icon"></i>
           </summary>
-          <p class="mt-3 text-gray-400">
-            No! Process files of any size, as many times as you want, completely
-            free.
+          <p class="faq-d-a">
+            For 90, 180, and 270 degrees the rotation is stored as a page
+            attribute and the page just turns. For any other angle the content
+            is placed on a new page sized to the rotated bounding box, so the
+            page gets larger and the corners around the content are left blank.
+          </p>
+        </details>
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            Does rotating by a custom angle turn my text into an image?
+            <i data-lucide="plus" class="faq-d-icon"></i>
+          </summary>
+          <p class="faq-d-a">
+            No. The page content is embedded as vector content and drawn at the
+            new angle, so text stays sharp, selectable, and searchable at any
+            zoom level. Links, form fields, and comments on pages rotated by a
+            non-90-degree angle aren't carried over, though.
+          </p>
+        </details>
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            How do I rotate every page by the same angle?
+            <i data-lucide="plus" class="faq-d-icon"></i>
+          </summary>
+          <p class="faq-d-a">
+            Type the angle in the Batch Rotation box at the top and click Apply
+            to All. That overwrites the angle on every page, so make any
+            per-page tweaks after the batch step, not before.
+          </p>
+        </details>
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            What do the minus and plus buttons next to each page do?
+            <i data-lucide="plus" class="faq-d-icon"></i>
+          </summary>
+          <p class="faq-d-a">
+            They nudge that page's angle by one degree in either direction and
+            are handy for fine-tuning after typing a rough value. For finer
+            control, type the value directly; the field accepts tenths of a
+            degree.
+          </p>
+        </details>
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            Can I rotate just one page and leave the rest alone?
+            <i data-lucide="plus" class="faq-d-icon"></i>
+          </summary>
+          <p class="faq-d-a">
+            Each page has its own angle field, so set the value on the page you
+            want and leave the others at 0. Pages left at 0 are copied through
+            unchanged.
+          </p>
+        </details>
+        <details class="faq-d">
+          <summary class="faq-d-q">
+            Is my PDF uploaded to rotate the pages?
+            <i data-lucide="plus" class="faq-d-icon"></i>
+          </summary>
+          <p class="faq-d-a">
+            No. The thumbnails are rendered and the rotated PDF is rebuilt in
+            your browser, and the file downloads under its original name
+            straight from the page. Nothing is sent to a server.
           </p>
         </details>
       </div>
@@ -394,7 +448,6 @@
     <script type="module" src="/src/js/utils/lucide-init.ts"></script>
     <script type="module" src="/src/js/utils/full-width.ts"></script>
     <script type="module" src="/src/js/utils/simple-mode-footer.ts"></script>
-    <script type="module" src="/src/version.ts"></script>
     <script type="module" src="/src/js/logic/rotate-custom-page.ts"></script>
     <script type="module" src="/src/js/mobileMenu.ts"></script>
     <script type="module" src="/src/js/main.ts"></script>
@@ -411,11 +464,6 @@
           "@type": "Offer",
           "price": "0",
           "priceCurrency": "USD"
-        },
-        "aggregateRating": {
-          "@type": "AggregateRating",
-          "ratingValue": "4.9",
-          "ratingCount": "2923"
         }
       }
     </script>

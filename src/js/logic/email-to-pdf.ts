@@ -1,5 +1,5 @@
 import PostalMime from 'postal-mime';
-import MsgReader from '@kenjiuno/msgreader';
+import MsgReaderDefault from '@kenjiuno/msgreader';
 import {
   formatBytes,
   escapeHtml,
@@ -8,6 +8,11 @@ import {
   formatRawDate,
 } from '../utils/helpers.js';
 import type { EmailAttachment, ParsedEmail, EmailRenderOptions } from '@/types';
+
+type MsgReaderCtor = typeof MsgReaderDefault;
+const MsgReader: MsgReaderCtor =
+  (MsgReaderDefault as unknown as { default?: MsgReaderCtor }).default ??
+  MsgReaderDefault;
 
 export type { EmailAttachment, ParsedEmail, EmailRenderOptions };
 
@@ -42,7 +47,14 @@ export async function parseEmlFile(file: File): Promise<ParsedEmail> {
     .filter(Boolean);
 
   // Helper to map parsing result to EmailAttachment
-  const mapAttachment = (att: any): EmailAttachment => {
+  interface RawAttachment {
+    content?: string | ArrayBuffer | Uint8Array;
+    filename?: string;
+    mimeType?: string;
+    contentId?: string;
+  }
+
+  const mapAttachment = (att: RawAttachment): EmailAttachment => {
     let content: Uint8Array | undefined;
     let size = 0;
     if (att.content) {
@@ -67,7 +79,9 @@ export async function parseEmlFile(file: File): Promise<ParsedEmail> {
 
   const attachments: EmailAttachment[] = [
     ...(email.attachments || []).map(mapAttachment),
-    ...((email as any).inline || []).map(mapAttachment),
+    ...((email as { inline?: RawAttachment[] }).inline || []).map(
+      mapAttachment
+    ),
   ];
 
   // Preserve original date string from headers
@@ -138,8 +152,16 @@ export async function parseMsgFile(file: File): Promise<ParsedEmail> {
     }
   }
 
+  interface MsgAttachment {
+    fileName?: string;
+    name?: string;
+    content?: ArrayLike<number>;
+    mimeType?: string;
+    pidContentId?: string;
+  }
+
   const attachments: EmailAttachment[] = (msgData.attachments || []).map(
-    (att: any) => ({
+    (att: MsgAttachment) => ({
       filename: att.fileName || att.name || 'unnamed',
       size: att.content?.length || 0,
       contentType: att.mimeType || 'application/octet-stream',
@@ -195,7 +217,13 @@ function processInlineImages(
     const att = cidMap.get(cid);
     if (att && att.content) {
       const base64 = uint8ArrayToBase64(att.content);
-      return `src="data:${att.contentType};base64,${base64}"`;
+      const safeType =
+        /^[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]*$/.test(
+          att.contentType
+        )
+          ? att.contentType
+          : 'application/octet-stream';
+      return `src="data:${safeType};base64,${base64}"`;
     }
     return match;
   });
@@ -207,7 +235,7 @@ export function renderEmailToHtml(
 ): string {
   const { includeCcBcc = true, includeAttachments = true } = options;
 
-  let processedHtml = '';
+  let processedHtml: string;
   if (email.htmlBody) {
     const sanitizedHtml = sanitizeEmailHtml(email.htmlBody);
     processedHtml = processInlineImages(sanitizedHtml, email.attachments);

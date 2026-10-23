@@ -3,8 +3,10 @@ import { downloadFile, formatBytes } from '../utils/helpers.js';
 import { convertFileToOutlines } from '../utils/ghostscript-loader.js';
 import { isGhostscriptAvailable } from '../utils/ghostscript-dynamic-loader.js';
 import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
+import { batchDecryptIfNeeded } from '../utils/password-prompt.js';
 import { icons, createIcons } from 'lucide';
 import JSZip from 'jszip';
+import { deduplicateFileName } from '../utils/deduplicate-filename.js';
 
 interface FontToOutlineState {
   files: File[];
@@ -106,6 +108,8 @@ async function processFiles() {
     return;
   }
 
+  pageState.files = await batchDecryptIfNeeded(pageState.files);
+
   const loaderModal = document.getElementById('loader-modal');
   const loaderText = document.getElementById('loader-text');
 
@@ -120,14 +124,14 @@ async function processFiles() {
         if (loaderText) loaderText.textContent = msg;
       });
 
-      const baseName = file.name.replace(/\.pdf$/i, '');
-      downloadFile(resultBlob, `${baseName}_outlined.pdf`);
+      downloadFile(resultBlob, file.name);
       if (loaderModal) loaderModal.classList.add('hidden');
     } else {
       if (loaderModal) loaderModal.classList.remove('hidden');
       if (loaderText) loaderText.textContent = 'Processing multiple PDFs...';
 
       const zip = new JSZip();
+      const usedNames = new Set<string>();
       let processedCount = 0;
 
       for (let i = 0; i < pageState.files.length; i++) {
@@ -138,8 +142,8 @@ async function processFiles() {
         try {
           const resultBlob = await convertFileToOutlines(file, () => {});
           const arrayBuffer = await resultBlob.arrayBuffer();
-          const baseName = file.name.replace(/\.pdf$/i, '');
-          zip.file(`${baseName}_outlined.pdf`, arrayBuffer);
+          const zipEntryName = deduplicateFileName(file.name, usedNames);
+          zip.file(zipEntryName, arrayBuffer);
           processedCount++;
         } catch (e) {
           console.error(`Error processing ${file.name}:`, e);

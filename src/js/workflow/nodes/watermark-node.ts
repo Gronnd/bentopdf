@@ -7,6 +7,8 @@ import { addTextWatermark, parsePageRange } from '../../utils/pdf-operations';
 import { PDFDocument } from 'pdf-lib';
 import { hexToRgb } from '../../utils/helpers.js';
 import * as pdfjsLib from 'pdfjs-dist';
+import { loadPdfDocument } from '../../utils/load-pdf-document.js';
+import { wfError } from '../errors';
 
 export class WatermarkNode extends BaseWorkflowNode {
   readonly category = 'Edit & Annotate' as const;
@@ -43,6 +45,18 @@ export class WatermarkNode extends BaseWorkflowNode {
     this.addControl(
       'position',
       new ClassicPreset.InputControl('text', { initial: 'center' })
+    );
+    this.addControl(
+      'tile',
+      new ClassicPreset.InputControl('text', { initial: 'no' })
+    );
+    this.addControl(
+      'tileGapX',
+      new ClassicPreset.InputControl('number', { initial: 25 })
+    );
+    this.addControl(
+      'tileGapY',
+      new ClassicPreset.InputControl('number', { initial: 75 })
     );
     this.addControl(
       'pages',
@@ -94,13 +108,17 @@ export class WatermarkNode extends BaseWorkflowNode {
     const posKey = getText('position', 'center').trim().toLowerCase();
     const { x, y } = positionPresets[posKey] ?? positionPresets['center'];
 
+    const tile = getText('tile', 'no').trim().toLowerCase() === 'yes';
+    const tileGapX = Math.max(0, getNum('tileGapX', 25)) / 100;
+    const tileGapY = Math.max(0, getNum('tileGapY', 75)) / 100;
+
     const pagesStr = getText('pages', 'all').trim().toLowerCase();
     const shouldFlatten =
       getText('flatten', 'no').trim().toLowerCase() === 'yes';
 
     return {
       pdf: await processBatch(pdfInputs, async (input) => {
-        const srcDoc = await PDFDocument.load(input.bytes);
+        const srcDoc = await loadPdfDocument(input.bytes);
         const totalPages = srcDoc.getPageCount();
 
         const pageIndices =
@@ -115,6 +133,9 @@ export class WatermarkNode extends BaseWorkflowNode {
           x,
           y: 1 - y,
           pageIndices,
+          tile,
+          tileGapX,
+          tileGapY,
         });
 
         if (shouldFlatten) {
@@ -141,7 +162,9 @@ export class WatermarkNode extends BaseWorkflowNode {
                   (blob) =>
                     blob
                       ? blob.arrayBuffer().then(resolve)
-                      : reject(new Error(`Failed to rasterize page ${i}`)),
+                      : reject(
+                          new Error(wfError('failedToRenderPage', { page: i }))
+                        ),
                   'image/jpeg',
                   0.92
                 )
@@ -163,7 +186,7 @@ export class WatermarkNode extends BaseWorkflowNode {
           resultBytes = new Uint8Array(await flattenedDoc.save());
         }
 
-        const resultDoc = await PDFDocument.load(resultBytes);
+        const resultDoc = await loadPdfDocument(resultBytes);
 
         return {
           type: 'pdf',

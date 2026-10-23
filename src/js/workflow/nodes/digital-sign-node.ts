@@ -3,13 +3,14 @@ import { BaseWorkflowNode } from './base-node';
 import { pdfSocket } from '../sockets';
 import type { SocketData } from '../types';
 import { requirePdfInput, processBatch } from '../types';
-import { PDFDocument } from 'pdf-lib';
 import {
   signPdf,
   parsePfxFile,
   parseCombinedPem,
 } from '../../logic/digital-sign-pdf.js';
 import type { CertificateData } from '@/types';
+import { loadPdfDocument } from '../../utils/load-pdf-document.js';
+import { wfError } from '../errors';
 
 export class DigitalSignNode extends BaseWorkflowNode {
   readonly category = 'Secure PDF' as const;
@@ -89,8 +90,7 @@ export class DigitalSignNode extends BaseWorkflowNode {
     inputs: Record<string, SocketData[]>
   ): Promise<Record<string, SocketData>> {
     const pdfInputs = requirePdfInput(inputs, 'Digital Sign');
-    if (!this.certData)
-      throw new Error('No certificate loaded in Digital Sign node');
+    if (!this.certData) throw new Error(wfError('digitalSignNoCertificate'));
 
     const reasonCtrl = this.controls['reason'] as
       | ClassicPreset.InputControl<'text'>
@@ -117,7 +117,7 @@ export class DigitalSignNode extends BaseWorkflowNode {
         });
 
         const bytes = new Uint8Array(signedBytes);
-        const document = await PDFDocument.load(bytes);
+        const document = await loadPdfDocument(bytes);
 
         return {
           type: 'pdf',

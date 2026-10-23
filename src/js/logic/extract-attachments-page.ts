@@ -1,4 +1,4 @@
-import { showAlert } from '../ui.js';
+import { showAlert, showLoader } from '../ui.js';
 import { downloadFile, formatBytes } from '../utils/helpers.js';
 import { createIcons, icons } from 'lucide';
 import JSZip from 'jszip';
@@ -7,6 +7,7 @@ import {
   showWasmRequiredDialog,
   WasmProvider,
 } from '../utils/wasm-provider.js';
+import { batchDecryptIfNeeded } from '../utils/password-prompt.js';
 
 const worker = new Worker(
   import.meta.env.BASE_URL + 'workers/extract-attachments.worker.js'
@@ -84,8 +85,27 @@ worker.onmessage = function (e) {
     const zip = new JSZip();
     let totalSize = 0;
 
+    const usedNames = new Set<string>();
     for (const attachment of attachments) {
-      zip.file(attachment.name, new Uint8Array(attachment.data));
+      const base =
+        (attachment.name || 'attachment')
+          .split(/[/\\]/)
+          .pop()
+          ?.replace(/^\.+/, '')
+          .replace(/\p{Cc}/gu, '')
+          .trim() || 'attachment';
+      let safeName = base;
+      let counter = 1;
+      while (usedNames.has(safeName)) {
+        const dot = base.lastIndexOf('.');
+        safeName =
+          dot > 0
+            ? `${base.slice(0, dot)}_${counter}${base.slice(dot)}`
+            : `${base}_${counter}`;
+        counter++;
+      }
+      usedNames.add(safeName);
+      zip.file(safeName, new Uint8Array(attachment.data));
       totalSize += attachment.data.byteLength;
     }
 
@@ -198,6 +218,9 @@ async function extractAttachments() {
   showStatus('Reading files...', 'info');
 
   try {
+    pageState.files = await batchDecryptIfNeeded(pageState.files);
+    showLoader('Reading files...');
+
     const fileBuffers: ArrayBuffer[] = [];
     const fileNames: string[] = [];
 
@@ -205,6 +228,14 @@ async function extractAttachments() {
       const buffer = await file.arrayBuffer();
       fileBuffers.push(buffer);
       fileNames.push(file.name);
+    }
+
+    if (fileBuffers.length === 0) {
+      if (processBtn) {
+        processBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        processBtn.removeAttribute('disabled');
+      }
+      return;
     }
 
     showStatus(

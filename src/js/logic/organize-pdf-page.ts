@@ -1,27 +1,20 @@
 import { createIcons, icons } from 'lucide';
 import { showAlert, showLoader, hideLoader } from '../ui.js';
-import {
-  readFileAsArrayBuffer,
-  formatBytes,
-  downloadFile,
-  getPDFDocument,
-} from '../utils/helpers.js';
+import { formatBytes, downloadFile } from '../utils/helpers.js';
 import { initPagePreview } from '../utils/page-preview.js';
 import { PDFDocument } from 'pdf-lib';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
 import * as pdfjsLib from 'pdfjs-dist';
 import Sortable from 'sortablejs';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+import { loadPdfDocument } from '../utils/load-pdf-document.js';
+import '../utils/setup-pdf-worker.js';
 
 interface OrganizeState {
   file: File | null;
-  pdfDoc: any;
-  pdfJsDoc: any;
+  pdfDoc: PDFDocument | null;
+  pdfJsDoc: pdfjsLib.PDFDocumentProxy | null;
   totalPages: number;
-  sortableInstance: any;
+  sortableInstance: Sortable | null;
 }
 
 const organizeState: OrganizeState = {
@@ -173,18 +166,16 @@ async function handleFile(file: File) {
     return;
   }
 
-  showLoader('Loading PDF...');
   organizeState.file = file;
 
   try {
-    const arrayBuffer = await readFileAsArrayBuffer(file);
-    organizeState.pdfDoc = await PDFDocument.load(arrayBuffer as ArrayBuffer, {
-      ignoreEncryption: true,
-      throwOnInvalidObject: false,
-    });
-    organizeState.pdfJsDoc = await getPDFDocument({
-      data: (arrayBuffer as ArrayBuffer).slice(0),
-    }).promise;
+    const result = await loadPdfWithPasswordPrompt(file);
+    if (!result) return;
+    showLoader('Loading PDF...');
+
+    organizeState.pdfDoc = await loadPdfDocument(result.bytes);
+    organizeState.pdfJsDoc = result.pdf;
+    organizeState.file = result.file;
     organizeState.totalPages = organizeState.pdfDoc.getPageCount();
 
     updateFileDisplay();
@@ -287,7 +278,7 @@ async function renderThumbnails() {
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvas: null, canvasContext: ctx, viewport }).promise;
 
     const wrapper = document.createElement('div');
     wrapper.className =
@@ -385,10 +376,9 @@ async function saveChanges() {
     copiedPages.forEach((page) => newPdf.addPage(page));
 
     const pdfBytes = await newPdf.save();
-    const baseName = organizeState.file?.name.replace('.pdf', '') || 'document';
     downloadFile(
       new Blob([pdfBytes as BlobPart], { type: 'application/pdf' }),
-      `${baseName}_organized.pdf`
+      organizeState.file?.name || 'document.pdf'
     );
 
     hideLoader();

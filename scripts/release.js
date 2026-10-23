@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const packageJsonPath = path.join(__dirname, '../package.json');
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+const chartYamlPath = path.join(__dirname, '../chart/Chart.yaml');
 
 function getCurrentVersion() {
   return packageJson.version;
@@ -39,6 +40,34 @@ function updateVersion(type) {
     JSON.stringify(packageJson, null, 2) + '\n'
   );
   return newVersion;
+}
+
+function updateHelmChart(newAppVersion) {
+  const lines = fs.readFileSync(chartYamlPath, 'utf8').split('\n');
+  let newChartVersion = null;
+
+  const updated = lines.map((line) => {
+    if (line.startsWith('version:')) {
+      const [maj, min, patch] = line
+        .slice('version:'.length)
+        .trim()
+        .split('.')
+        .map(Number);
+      newChartVersion = `${maj}.${min}.${patch + 1}`;
+      return `version: ${newChartVersion}`;
+    }
+    if (line.startsWith('appVersion:')) {
+      return `appVersion: '${newAppVersion}'`;
+    }
+    return line;
+  });
+
+  if (!newChartVersion) {
+    throw new Error('Could not find chart version line in chart/Chart.yaml');
+  }
+
+  fs.writeFileSync(chartYamlPath, updated.join('\n'));
+  return { chartVersion: newChartVersion, appVersion: newAppVersion };
 }
 
 function createGitTag(version) {
@@ -75,26 +104,28 @@ function main() {
   const newVersion = updateVersion(type);
   console.log(`📦 Updated version to ${newVersion}`);
 
-  // 2. Update version in HTML files
-  console.log(`📝 Updating version in HTML files...`);
-  execSync('npm run update-version', { stdio: 'inherit' });
+  // 2. Bump Helm chart appVersion + chart version
+  const chart = updateHelmChart(newVersion);
+  console.log(
+    `⚓ Updated chart version to ${chart.chartVersion}, appVersion to ${chart.appVersion}`
+  );
 
   // 3. Add and commit changes
-  execSync('git add package.json *.html src/pages/*.html', {
+  execSync('git add package.json chart/Chart.yaml', {
     stdio: 'inherit',
   });
   execSync(`git commit -m "Release v${newVersion}"`, { stdio: 'inherit' });
   console.log(`💾 Committed version change`);
 
-  // 4. Create git tag
+  // 3. Create git tag
   const tagName = createGitTag(newVersion);
 
-  // 5. Build and package the distribution files
+  // 4. Build and package the distribution files
   console.log(`📦 Building and packaging distribution files...`);
   execSync('npm run package', { stdio: 'inherit' });
   console.log(`📦 Distribution files packaged successfully`);
 
-  // 6. Push everything to main
+  // 5. Push everything to main
   console.log(`📤 Pushing to main...`);
   execSync('git push origin main', { stdio: 'inherit' });
   execSync(`git push origin ${tagName}`, { stdio: 'inherit' });
@@ -102,11 +133,9 @@ function main() {
   console.log(`🎉 Release v${newVersion} complete!`);
   console.log(`📦 Docker image: bentopdfteam/bentopdf:${newVersion}`);
   console.log(`📦 Distribution: dist-${newVersion}.zip`);
+  console.log(`📦 Distribution (simple): dist-simple-${newVersion}.zip`);
   console.log(
     `🏷️  GitHub release: https://github.com/alam00000/bentopdf/releases/tag/${tagName}`
-  );
-  console.log(
-    `💡 Download dist-${newVersion}.zip from the release page for self-hosting.`
   );
 }
 

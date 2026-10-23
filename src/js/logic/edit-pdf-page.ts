@@ -2,15 +2,63 @@
 import { createIcons, icons } from 'lucide';
 import { showAlert, showLoader, hideLoader } from '../ui.js';
 import { formatBytes, downloadFile } from '../utils/helpers.js';
+import { makeUniqueFileKey } from '../utils/deduplicate-filename.js';
+import { batchDecryptIfNeeded } from '../utils/password-prompt.js';
+import { getEditorDisabledCategories } from '../utils/disabled-tools.js';
+import { editorFontFallback } from '../config/editor-fonts.js';
+import { needsFontEmbedding } from '../utils/freetext-script.js';
 
 const embedPdfWasmUrl = new URL(
-  'embedpdf-snippet/dist/pdfium.wasm',
+  'bentopdf-pdfium/editcore.wasm',
   import.meta.url
 ).href;
 
-let viewerInstance: any = null;
-let docManagerPlugin: any = null;
+import type { EmbedPdfContainer } from 'bentopdf-viewer';
+import type {
+  AnnotationPluginLite,
+  DocManagerPlugin,
+  FreeTextSystemFontAnnotation,
+} from '@/types';
+
+const FREETEXT_SUBTYPE = 3;
+
+function collectAllFreeTexts(
+  annotationPlugin: AnnotationPluginLite | null
+): FreeTextSystemFontAnnotation[] {
+  if (!annotationPlugin) return [];
+  try {
+    const state = annotationPlugin.getState();
+    const out: FreeTextSystemFontAnnotation[] = [];
+    for (const tracked of Object.values(state.byUid)) {
+      const obj = tracked.object;
+      if (obj.type !== FREETEXT_SUBTYPE) continue;
+      if (obj.intent === 'FreeTextCallout') continue;
+      if (!obj.id || obj.pageIndex == null || !obj.rect) continue;
+      out.push({
+        id: obj.id,
+        pageIndex: obj.pageIndex,
+        contents: obj.contents ?? '',
+        fontSize: obj.fontSize ?? 12,
+        fontColor: obj.fontColor ?? '#000000',
+        textAlign: obj.textAlign ?? 0,
+        verticalAlign: obj.verticalAlign ?? 0,
+        opacity: obj.opacity ?? 1,
+        backgroundColor: obj.color ?? obj.backgroundColor,
+        rect: obj.rect,
+        fontPostScriptName: obj.fontPostScriptName ?? '',
+        rotation: obj.rotation ?? 0,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+let viewerInstance: EmbedPdfContainer | null = null;
+let docManagerPlugin: DocManagerPlugin | null = null;
 let isViewerInitialized = false;
+let currentFileName = 'document.pdf';
 const fileEntryMap = new Map<string, HTMLElement>();
 
 function resetViewer() {
@@ -111,19 +159,32 @@ async function handleFiles(files: FileList) {
 
     if (!pdfWrapper || !pdfContainer || !fileDisplayArea) return;
 
+    hideLoader();
+    const decryptedFiles = await batchDecryptIfNeeded(pdfFiles);
+    showLoader('Loading PDF Editor...');
+
+    if (decryptedFiles.length === 0) {
+      hideLoader();
+      return;
+    }
+
     if (!isViewerInitialized) {
-      const firstFile = pdfFiles[0];
+      const firstFile = decryptedFiles[0];
+      currentFileName = firstFile.name;
       const firstBuffer = await firstFile.arrayBuffer();
 
       pdfContainer.textContent = '';
       pdfWrapper.classList.remove('hidden');
 
-      const { default: EmbedPDF } = await import('embedpdf-snippet');
+      const { default: EmbedPDF } = await import('bentopdf-viewer');
+      const disabledCategories = getEditorDisabledCategories();
       viewerInstance = EmbedPDF.init({
+        disabledCategories,
         type: 'container',
         target: pdfContainer,
         worker: true,
         wasmUrl: embedPdfWasmUrl,
+        fontFallback: editorFontFallback,
         export: {
           defaultFileName: firstFile.name,
         },
@@ -134,47 +195,51 @@ async function handleFiles(files: FileList) {
       });
 
       const registry = await viewerInstance.registry;
-      docManagerPlugin = registry.getPlugin('document-manager').provides();
+      docManagerPlugin = registry
+        .getPlugin('document-manager')
+        .provides() as unknown as DocManagerPlugin;
 
-      docManagerPlugin.onDocumentClosed((data: any) => {
-        const docId = data?.id || data;
+      docManagerPlugin.onDocumentClosed((data: { id?: string }) => {
+        const docId = data?.id || '';
         removeFileEntry(docId);
       });
 
-      docManagerPlugin.onDocumentOpened((data: any) => {
-        const docId = data?.id;
-        const docName = data?.name;
-        if (!docId) return;
-        const pendingEntry = fileDisplayArea.querySelector(
-          `[data-pending-name="${CSS.escape(docName)}"]`
-        ) as HTMLElement;
-        if (pendingEntry) {
-          pendingEntry.removeAttribute('data-pending-name');
-          fileEntryMap.set(docId, pendingEntry);
-          const removeBtn = pendingEntry.querySelector(
-            '[data-remove-btn]'
+      docManagerPlugin.onDocumentOpened(
+        (data: { id?: string; name?: string }) => {
+          const docId = data?.id;
+          const docKey = data?.name;
+          if (!docId) return;
+          const pendingEntry = fileDisplayArea.querySelector(
+            `[data-pending-name="${CSS.escape(docKey)}"]`
           ) as HTMLElement;
-          if (removeBtn) {
-            removeBtn.onclick = () => {
-              docManagerPlugin.closeDocument(docId);
-            };
+          if (pendingEntry) {
+            pendingEntry.removeAttribute('data-pending-name');
+            fileEntryMap.set(docId, pendingEntry);
+            const removeBtn = pendingEntry.querySelector(
+              '[data-remove-btn]'
+            ) as HTMLElement;
+            if (removeBtn) {
+              removeBtn.onclick = () => {
+                docManagerPlugin.closeDocument(docId);
+              };
+            }
           }
         }
-      });
+      );
 
-      addFileEntries(fileDisplayArea, pdfFiles);
+      addFileEntries(fileDisplayArea, decryptedFiles);
 
       docManagerPlugin.openDocumentBuffer({
         buffer: firstBuffer,
-        name: firstFile.name,
+        name: makeUniqueFileKey(0, firstFile.name),
         autoActivate: true,
       });
 
-      for (let i = 1; i < pdfFiles.length; i++) {
-        const buffer = await pdfFiles[i].arrayBuffer();
+      for (let i = 1; i < decryptedFiles.length; i++) {
+        const buffer = await decryptedFiles[i].arrayBuffer();
         docManagerPlugin.openDocumentBuffer({
           buffer,
-          name: pdfFiles[i].name,
+          name: makeUniqueFileKey(i, decryptedFiles[i].name),
           autoActivate: false,
         });
       }
@@ -195,8 +260,51 @@ async function handleFiles(files: FileList) {
         try {
           const exportPlugin = registry.getPlugin('export').provides();
           const arrayBuffer = await exportPlugin.saveAsCopy().toPromise();
-          const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
-          downloadFile(blob, 'edited-document.pdf');
+          let outBytes = new Uint8Array(arrayBuffer);
+          let annotationPlugin: AnnotationPluginLite | null = null;
+          try {
+            annotationPlugin = registry
+              .getPlugin('annotation')
+              .provides() as unknown as AnnotationPluginLite;
+          } catch {
+            annotationPlugin = null;
+          }
+          const allFreeTexts = collectAllFreeTexts(annotationPlugin);
+          let pending = allFreeTexts;
+          if (pending.length > 0) {
+            try {
+              const { flattenFreeTextToPageText } =
+                await import('../utils/freetext-flatten.js');
+              const res = await flattenFreeTextToPageText(outBytes, pending);
+              if (res.flattened > 0) {
+                outBytes = res.bytes;
+                pending = [];
+              }
+            } catch (err) {
+              console.error('Flatten pass failed:', err);
+            }
+          }
+          const customFontAnnots = pending.filter(
+            (a) =>
+              a.fontPostScriptName.trim() !== '' ||
+              needsFontEmbedding(a.contents)
+          );
+          if (customFontAnnots.length > 0) {
+            try {
+              const { embedFreeTextSystemFonts } =
+                await import('../utils/freetext-font-embed.js');
+              outBytes = await embedFreeTextSystemFonts(
+                outBytes,
+                customFontAnnots
+              );
+            } catch (err) {
+              console.error('Font embed pass failed:', err);
+            }
+          }
+          const blob = new Blob([new Uint8Array(outBytes)], {
+            type: 'application/pdf',
+          });
+          downloadFile(blob, currentFileName);
         } catch (err) {
           console.error('Error downloading PDF:', err);
           showAlert('Error', 'Failed to download the edited PDF.');
@@ -213,13 +321,13 @@ async function handleFiles(files: FileList) {
         });
       }
     } else {
-      addFileEntries(fileDisplayArea, pdfFiles);
+      addFileEntries(fileDisplayArea, decryptedFiles);
 
-      for (const file of pdfFiles) {
-        const buffer = await file.arrayBuffer();
+      for (let i = 0; i < decryptedFiles.length; i++) {
+        const buffer = await decryptedFiles[i].arrayBuffer();
         docManagerPlugin.openDocumentBuffer({
           buffer,
-          name: file.name,
+          name: makeUniqueFileKey(i, decryptedFiles[i].name),
           autoActivate: true,
         });
       }
@@ -233,11 +341,12 @@ async function handleFiles(files: FileList) {
 }
 
 function addFileEntries(fileDisplayArea: HTMLElement, files: File[]) {
-  for (const file of files) {
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
     const fileDiv = document.createElement('div');
     fileDiv.className =
       'flex items-center justify-between bg-gray-700 p-3 rounded-lg';
-    fileDiv.setAttribute('data-pending-name', file.name);
+    fileDiv.setAttribute('data-pending-name', makeUniqueFileKey(i, file.name));
 
     const infoContainer = document.createElement('div');
     infoContainer.className = 'flex flex-col flex-1 min-w-0';

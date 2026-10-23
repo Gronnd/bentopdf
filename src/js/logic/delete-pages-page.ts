@@ -1,21 +1,16 @@
 import { createIcons, icons } from 'lucide';
 import { showAlert, showLoader, hideLoader } from '../ui.js';
 import {
-  readFileAsArrayBuffer,
   formatBytes,
   downloadFile,
-  getPDFDocument,
   parsePageRanges,
 } from '../utils/helpers.js';
-import { PDFDocument } from 'pdf-lib';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
 import { deletePdfPages } from '../utils/pdf-operations.js';
 import * as pdfjsLib from 'pdfjs-dist';
 import { DeletePagesState } from '@/types';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+import { loadPdfDocument } from '../utils/load-pdf-document.js';
+import '../utils/setup-pdf-worker.js';
 
 const deleteState: DeletePagesState = {
   file: null,
@@ -85,18 +80,18 @@ async function handleFile(file: File) {
     return;
   }
 
-  showLoader('Loading PDF...');
   deleteState.file = file;
 
   try {
-    const arrayBuffer = await readFileAsArrayBuffer(file);
-    deleteState.pdfDoc = await PDFDocument.load(arrayBuffer as ArrayBuffer, {
-      ignoreEncryption: true,
-      throwOnInvalidObject: false,
-    });
-    deleteState.pdfJsDoc = await getPDFDocument({
-      data: (arrayBuffer as ArrayBuffer).slice(0),
-    }).promise;
+    const result = await loadPdfWithPasswordPrompt(file);
+    if (!result) {
+      deleteState.file = null;
+      return;
+    }
+    showLoader('Loading PDF...');
+    deleteState.file = result.file;
+    deleteState.pdfDoc = await loadPdfDocument(result.bytes);
+    deleteState.pdfJsDoc = result.pdf;
     deleteState.totalPages = deleteState.pdfDoc.getPageCount();
     deleteState.pagesToDelete = new Set();
 
@@ -165,7 +160,7 @@ async function renderThumbnails() {
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvas: null, canvasContext: ctx, viewport }).promise;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'relative cursor-pointer group';
@@ -268,12 +263,11 @@ async function deletePages() {
       new Uint8Array(srcBytes),
       deleteState.pagesToDelete
     );
-    const baseName = deleteState.file?.name.replace('.pdf', '') || 'document';
     downloadFile(
-      new Blob([resultBytes as unknown as BlobPart], {
+      new Blob([new Uint8Array(resultBytes)], {
         type: 'application/pdf',
       }),
-      `${baseName}_pages_removed.pdf`
+      deleteState.file?.name || 'document.pdf'
     );
 
     hideLoader();

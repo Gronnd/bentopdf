@@ -4,11 +4,12 @@ Kubernetes may be overkill for a static site, but it can be a great fit if you a
 
 > [!IMPORTANT]
 > **Required Headers for Office File Conversion**
-> 
+>
 > LibreOffice-based tools (Word, Excel, PowerPoint conversion) require these HTTP headers for `SharedArrayBuffer` support:
+>
 > - `Cross-Origin-Opener-Policy: same-origin`
 > - `Cross-Origin-Embedder-Policy: require-corp`
-> 
+>
 > The official BentoPDF nginx images include these headers. In Kubernetes, **Ingress/Gateway controllers are also reverse proxies**, so ensure these headers are preserved (or add them at the edge).
 
 ## Prereqs
@@ -129,6 +130,23 @@ ingress:
       add_header Cross-Origin-Embedder-Policy "require-corp" always;
 ```
 
+## `.mjs` MIME-type errors (Sign PDF / Form Filler iframe blank)
+
+If the browser console shows `Failed to load module script: ... non-JavaScript MIME type "application/octet-stream"` on a `.mjs` request, an Ingress/Gateway controller in front of the BentoPDF nginx is replacing the upstream `Content-Type` header with `application/octet-stream`.
+
+The BentoPDF image's nginx already serves `.mjs` as `application/javascript`. The fix is to stop the controller from stripping/replacing it. For nginx-ingress:
+
+```yaml
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      location ~* \.mjs$ {
+        types {} default_type application/javascript;
+      }
+```
+
+Or use a `ResponseHeaderModifier` filter in Gateway API to set `Content-Type: application/javascript` for `.mjs` paths. Verify with DevTools → Network tab: the failed `.mjs` request should now show `content-type: application/javascript`.
+
 ### If you’re using Gateway API and want to force-add headers
 
 Gateway API supports a `ResponseHeaderModifier` filter. You can attach it in `httpRoute.rules[*].filters`:
@@ -155,3 +173,39 @@ httpRoute:
 ```
 
 Support for specific filters depends on your Gateway controller; if a filter is ignored, add headers at the edge/controller layer instead.
+
+## Disabling Specific Tools
+
+Use a ConfigMap to disable tools at runtime without rebuilding the image:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bentopdf-config
+  namespace: bentopdf
+data:
+  config.json: |
+    {
+      "disabledTools": ["edit-pdf", "sign-pdf", "encrypt-pdf"]
+    }
+```
+
+Mount it into the served directory:
+
+```yaml
+spec:
+  containers:
+    - name: bentopdf
+      volumeMounts:
+        - name: config
+          mountPath: /usr/share/nginx/html/config.json
+          subPath: config.json
+          readOnly: true
+  volumes:
+    - name: config
+      configMap:
+        name: bentopdf-config
+```
+
+Tool IDs are the page URL without `.html` — open any tool and look at the URL (e.g., `edit-pdf`, `merge-pdf`, `compress-pdf`). Disabled tools are hidden from the homepage, search, shortcuts, workflow builder, and direct URL access. See the [Docker guide](/self-hosting/docker#disabling-specific-tools) for the full list of options.

@@ -7,6 +7,7 @@ import {
   showWasmRequiredDialog,
   WasmProvider,
 } from '../utils/wasm-provider.js';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
 
 const worker = new Worker(
   import.meta.env.BASE_URL + 'workers/edit-attachments.worker.js'
@@ -43,7 +44,11 @@ worker.onmessage = function (e) {
   const data = e.data;
 
   if (data.status === 'success' && data.attachments !== undefined) {
-    pageState.allAttachments = data.attachments.map(function (att: any) {
+    pageState.allAttachments = data.attachments.map(function (att: {
+      data: ArrayBuffer;
+      filename: string;
+      description: string;
+    }) {
       return {
         ...att,
         data: new Uint8Array(att.data),
@@ -55,11 +60,9 @@ worker.onmessage = function (e) {
   } else if (data.status === 'success' && data.modifiedPDF !== undefined) {
     hideLoader();
 
-    const originalName =
-      pageState.file?.name.replace(/\.pdf$/i, '') || 'document';
     downloadFile(
       new Blob([new Uint8Array(data.modifiedPDF)], { type: 'application/pdf' }),
-      `${originalName}_edited.pdf`
+      pageState.file?.name || 'document.pdf'
     );
 
     showAlert(
@@ -327,14 +330,17 @@ async function updateUI() {
   }
 }
 
-function handleFileSelect(files: FileList | null) {
+async function handleFileSelect(files: FileList | null) {
   if (files && files.length > 0) {
     const file = files[0];
     if (
       file.type === 'application/pdf' ||
       file.name.toLowerCase().endsWith('.pdf')
     ) {
-      pageState.file = file;
+      const result = await loadPdfWithPasswordPrompt(file);
+      if (!result) return;
+      result.pdf.destroy();
+      pageState.file = result.file;
       updateUI();
     }
   }

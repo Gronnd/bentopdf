@@ -1,10 +1,6 @@
 import { createIcons, icons } from 'lucide';
 import { showAlert, showLoader, hideLoader } from '../ui.js';
-import {
-  downloadFile,
-  readFileAsArrayBuffer,
-  formatBytes,
-} from '../utils/helpers.js';
+import { downloadFile, formatBytes } from '../utils/helpers.js';
 import { PDFDocument as PDFLibDocument } from 'pdf-lib';
 import {
   getSelectedQuality,
@@ -247,7 +243,8 @@ async function convertToPdf() {
       } catch (error) {
         console.error(`Failed to process ${file.name}:`, error);
         throw new Error(
-          `Could not process "${file.name}". The file may be corrupted.`
+          `Could not process "${file.name}". The file may be corrupted.`,
+          { cause: error }
         );
       }
     }
@@ -260,9 +257,9 @@ async function convertToPdf() {
     showAlert('Success', 'PDF created successfully!', 'success', () => {
       resetState();
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error(e);
-    showAlert('Conversion Error', e.message);
+    showAlert('Conversion Error', e instanceof Error ? e.message : String(e));
   } finally {
     hideLoader();
   }

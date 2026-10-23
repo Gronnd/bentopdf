@@ -1,22 +1,37 @@
-import { defineConfig, Plugin } from 'vitest/config';
+import { defineConfig } from 'vitest/config';
 import type { IncomingMessage, ServerResponse } from 'http';
-import type { Connect } from 'vite';
-import basicSsl from '@vitejs/plugin-basic-ssl';
+import http from 'http';
+import https from 'https';
+import type { Connect, Plugin } from 'vite';
+// import basicSsl from '@vitejs/plugin-basic-ssl';
 import tailwindcss from '@tailwindcss/vite';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
-import { viteStaticCopy } from 'vite-plugin-static-copy';
 import viteCompression from 'vite-plugin-compression';
 import handlebars from 'vite-plugin-handlebars';
 import { resolve } from 'path';
 import fs from 'fs';
 import { constants as zlibConstants } from 'zlib';
-import type { OutputBundle } from 'rollup';
+import { createHash } from 'crypto';
+
+function engineVersion(): string {
+  try {
+    const dir = resolve(__dirname, 'node_modules/bentopdf-pdfium');
+    const h = createHash('sha256');
+    for (const f of ['editcore.js', 'editcore.wasm']) {
+      h.update(fs.readFileSync(resolve(dir, f)));
+    }
+    return h.digest('hex').slice(0, 12);
+  } catch {
+    return 'dev';
+  }
+}
 
 const SUPPORTED_LANGUAGES = [
   'en',
   'ar',
   'be',
   'da',
+  'ru',
   'de',
   'es',
   'fr',
@@ -24,11 +39,16 @@ const SUPPORTED_LANGUAGES = [
   'it',
   'nl',
   'pt',
+  'pl',
   'sv',
   'tr',
   'vi',
   'zh',
   'zh-TW',
+  'ko',
+  'ja',
+  'uk',
+  'sk',
 ] as const;
 const LANG_REGEX = new RegExp(
   `^/(${SUPPORTED_LANGUAGES.join('|')})(?:/(.*))?$`
@@ -54,6 +74,8 @@ function loadPages(): Set<string> {
     'privacy',
     'terms',
     'licensing',
+    'kura',
+    'hyper-compress',
     'tools',
     '404',
     'pdf-converter',
@@ -192,7 +214,165 @@ function createLanguageMiddleware(isDev: boolean): Connect.NextHandleFunction {
       }
     }
 
+    if (pathname === '/blog' || pathname === '/blog/') {
+      req.url = '/blog/index.html' + (queryString ? `?${queryString}` : '');
+      return next();
+    }
+
+    const blogMatch = pathname.match(/^\/blog\/([a-z0-9-]+)\/?$/);
+    if (blogMatch) {
+      req.url =
+        `/blog/${blogMatch[1]}.html` + (queryString ? `?${queryString}` : '');
+      return next();
+    }
+
     next();
+  };
+}
+
+function buildCorsProxyAllowedHosts(): Set<string> {
+  const hosts = new Set<string>([
+    'cdn.jsdelivr.net',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com',
+    'bentopdf-cors-proxy.bentopdf.workers.dev',
+    'timestamp.digicert.com',
+    'timestamp.sectigo.com',
+    'ts.ssl.com',
+    'freetsa.org',
+    'tsa.mesign.com',
+  ]);
+
+  const envHostSources = [
+    process.env.VITE_CORS_PROXY_URL,
+    process.env.VITE_WASM_PYMUPDF_URL,
+    process.env.VITE_WASM_GS_URL,
+    process.env.VITE_WASM_CPDF_URL,
+    process.env.VITE_TESSERACT_WORKER_URL,
+    process.env.VITE_TESSERACT_CORE_URL,
+    process.env.VITE_TESSERACT_LANG_URL,
+    process.env.VITE_OCR_FONT_BASE_URL,
+  ];
+  for (const raw of envHostSources) {
+    if (!raw) continue;
+    try {
+      hosts.add(new URL(raw).hostname);
+    } catch {
+      console.warn(
+        `[vite] Ignoring malformed VITE_* URL in dev CORS proxy allowlist: ${raw}`
+      );
+    }
+  }
+
+  const extra = process.env.VITE_DEV_CORS_PROXY_EXTRA_HOSTS;
+  if (extra) {
+    for (const host of extra.split(',').map((s) => s.trim())) {
+      if (host) hosts.add(host);
+    }
+  }
+
+  return hosts;
+}
+
+const CORS_PROXY_ALLOWED_HOSTS = buildCorsProxyAllowedHosts();
+
+function createCorsProxyMiddleware(): Connect.NextHandleFunction {
+  return (
+    req: IncomingMessage,
+    res: ServerResponse,
+    next: Connect.NextFunction
+  ): void => {
+    if (!req.url?.startsWith('/cors-proxy')) return next();
+
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
+
+    const parsed = new URL(req.url, 'http://localhost');
+    const targetUrl = parsed.searchParams.get('url');
+    if (!targetUrl) {
+      res.statusCode = 400;
+      res.end('Missing url parameter');
+      return;
+    }
+
+    let targetHost: string;
+    let targetProtocol: string;
+    try {
+      const parsedTarget = new URL(targetUrl);
+      targetHost = parsedTarget.hostname;
+      targetProtocol = parsedTarget.protocol;
+    } catch {
+      res.statusCode = 400;
+      res.end('Invalid url parameter');
+      return;
+    }
+
+    if (targetProtocol !== 'https:' && targetProtocol !== 'http:') {
+      res.statusCode = 400;
+      res.end('Unsupported protocol');
+      return;
+    }
+
+    if (!CORS_PROXY_ALLOWED_HOSTS.has(targetHost)) {
+      console.warn(`[CORS Proxy] Blocked disallowed host: ${targetHost}`);
+      res.statusCode = 403;
+      res.end(`Host not allowed: ${targetHost}`);
+      return;
+    }
+
+    console.log(`[CORS Proxy] ${req.method} ${targetUrl}`);
+
+    const bodyChunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => bodyChunks.push(chunk));
+    req.on('end', () => {
+      const body = Buffer.concat(bodyChunks);
+      const target = new URL(targetUrl);
+      const transport = target.protocol === 'https:' ? https : http;
+
+      const headers: Record<string, string> = {};
+      if (req.headers['content-type']) {
+        headers['Content-Type'] = req.headers['content-type'] as string;
+      }
+      if (body.length > 0) {
+        headers['Content-Length'] = String(body.length);
+      }
+
+      const proxyReq = transport.request(
+        targetUrl,
+        { method: req.method || 'GET', headers },
+        (proxyRes) => {
+          console.log(
+            `[CORS Proxy] Response: ${proxyRes.statusCode} from ${targetUrl}`
+          );
+          res.setHeader(
+            'Access-Control-Allow-Origin',
+            req.headers.origin || '*'
+          );
+          res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+          res.statusCode = proxyRes.statusCode || 200;
+          proxyRes.pipe(res);
+        }
+      );
+
+      proxyReq.on('error', (err) => {
+        const msg = String(err.message).replace(/[\r\n]+/g, ' ');
+        console.error('[CORS Proxy] Error:', msg);
+        res.statusCode = 502;
+        res.end(`Proxy error: ${msg}`);
+      });
+
+      if (body.length > 0) {
+        proxyReq.write(body);
+      }
+      proxyReq.end();
+    });
   };
 }
 
@@ -200,9 +380,11 @@ function languageRouterPlugin(): Plugin {
   return {
     name: 'language-router',
     configureServer(server) {
+      server.middlewares.use(createCorsProxyMiddleware());
       server.middlewares.use(createLanguageMiddleware(true));
     },
     configurePreviewServer(server) {
+      server.middlewares.use(createCorsProxyMiddleware());
       server.middlewares.use(createLanguageMiddleware(false));
     },
   };
@@ -212,20 +394,92 @@ function flattenPagesPlugin(): Plugin {
   return {
     name: 'flatten-pages',
     enforce: 'post',
-    generateBundle(_: unknown, bundle: OutputBundle): void {
+    writeBundle(options, bundle) {
+      const outDir = options.dir;
+      if (!outDir) return;
+
+      const moves: Array<{ from: string; to: string }> = [];
+
       for (const fileName of Object.keys(bundle)) {
         if (fileName.startsWith('src/pages/') && fileName.endsWith('.html')) {
-          const newFileName = fileName.replace('src/pages/', '');
-          bundle[newFileName] = bundle[fileName];
-          bundle[newFileName].fileName = newFileName;
-          delete bundle[fileName];
+          moves.push({
+            from: fileName,
+            to: fileName.replace('src/pages/', ''),
+          });
         }
       }
+
       if (process.env.SIMPLE_MODE === 'true' && bundle['simple-index.html']) {
-        bundle['index.html'] = bundle['simple-index.html'];
-        bundle['index.html'].fileName = 'index.html';
-        delete bundle['simple-index.html'];
+        moves.push({ from: 'simple-index.html', to: 'index.html' });
       }
+
+      for (const { from, to } of moves) {
+        const oldPath = resolve(outDir, from);
+        const newPath = resolve(outDir, to);
+        if (!fs.existsSync(oldPath)) continue;
+        fs.mkdirSync(resolve(newPath, '..'), { recursive: true });
+        if (fs.existsSync(newPath)) fs.rmSync(newPath, { force: true });
+        fs.renameSync(oldPath, newPath);
+      }
+
+      const pagesDir = resolve(outDir, 'src/pages');
+      if (fs.existsSync(pagesDir) && fs.readdirSync(pagesDir).length === 0) {
+        fs.rmdirSync(pagesDir);
+      }
+      const srcDir = resolve(outDir, 'src');
+      if (fs.existsSync(srcDir) && fs.readdirSync(srcDir).length === 0) {
+        fs.rmdirSync(srcDir);
+      }
+    },
+  };
+}
+
+function swPrecachePlugin(): Plugin {
+  const workerAssetPattern = /^assets\/pdf\.worker(\.min)?-[\w-]+\.m?js$/;
+  const placeholderPattern = /const PRECACHE_ASSETS = \[[\s\S]*?\];/;
+
+  return {
+    name: 'sw-precache',
+    apply: 'build',
+    enforce: 'post',
+    writeBundle(options, bundle) {
+      const outDir = options.dir;
+      if (!outDir) return;
+
+      const workerAssets = Object.keys(bundle)
+        .filter((fileName) => workerAssetPattern.test(fileName))
+        .sort();
+
+      if (workerAssets.length === 0) {
+        throw new Error(
+          '[sw-precache] no PDF.js worker asset found in bundle; service worker would precache nothing'
+        );
+      }
+
+      const swPath = resolve(outDir, 'sw.js');
+      if (!fs.existsSync(swPath)) {
+        throw new Error(`[sw-precache] ${swPath} not found in build output`);
+      }
+
+      const source = fs.readFileSync(swPath, 'utf8');
+      if (!placeholderPattern.test(source)) {
+        throw new Error(
+          '[sw-precache] could not find "const PRECACHE_ASSETS = [...]" in sw.js'
+        );
+      }
+
+      const list = workerAssets.map((asset) => `  '${asset}',`).join('\n');
+      fs.writeFileSync(
+        swPath,
+        source.replace(
+          placeholderPattern,
+          `const PRECACHE_ASSETS = [\n${list}\n];`
+        )
+      );
+
+      console.log(
+        `[sw-precache] precaching ${workerAssets.length} asset(s): ${workerAssets.join(', ')}`
+      );
     },
   };
 }
@@ -239,31 +493,35 @@ function rewriteHtmlPathsPlugin(): Plugin {
   return {
     name: 'rewrite-html-paths',
     enforce: 'post',
-    generateBundle(_: unknown, bundle: OutputBundle): void {
+    writeBundle(options, bundle) {
       if (normalizedBase === '/') return;
+      const outDir = options.dir;
+      if (!outDir) return;
+
+      const hrefRegex = new RegExp(
+        `href="\\/(?!${escapedBase.slice(1)}|test\\/|http|\\/\\/)`,
+        'g'
+      );
+      const srcRegex = new RegExp(
+        `src="\\/(?!${escapedBase.slice(1)}|test\\/|http|\\/\\/)`,
+        'g'
+      );
+      const contentRegex = new RegExp(
+        `content="\\/(?!${escapedBase.slice(1)}|test\\/|http|\\/\\/)`,
+        'g'
+      );
 
       for (const fileName of Object.keys(bundle)) {
-        if (fileName.endsWith('.html')) {
-          const asset = bundle[fileName];
-          if (asset.type === 'asset' && typeof asset.source === 'string') {
-            const hrefRegex = new RegExp(
-              `href="\\/(?!${escapedBase.slice(1)}|test\\/|http|\\/\\/)`,
-              'g'
-            );
-            const srcRegex = new RegExp(
-              `src="\\/(?!${escapedBase.slice(1)}|test\\/|http|\\/\\/)`,
-              'g'
-            );
-            const contentRegex = new RegExp(
-              `content="\\/(?!${escapedBase.slice(1)}|test\\/|http|\\/\\/)`,
-              'g'
-            );
-
-            asset.source = asset.source
-              .replace(hrefRegex, `href="${normalizedBase}`)
-              .replace(srcRegex, `src="${normalizedBase}`)
-              .replace(contentRegex, `content="${normalizedBase}`);
-          }
+        if (!fileName.endsWith('.html')) continue;
+        const diskPath = resolve(outDir, fileName);
+        if (!fs.existsSync(diskPath)) continue;
+        const source = fs.readFileSync(diskPath, 'utf8');
+        const updated = source
+          .replace(hrefRegex, `href="${normalizedBase}`)
+          .replace(srcRegex, `src="${normalizedBase}`)
+          .replace(contentRegex, `content="${normalizedBase}`);
+        if (updated !== source) {
+          fs.writeFileSync(diskPath, updated);
         }
       }
     },
@@ -279,15 +537,11 @@ export default defineConfig(() => {
     console.log('[Vite] Using local WASM files only');
   }
 
-  const staticCopyTargets = [
-    {
-      src: 'node_modules/embedpdf-snippet/dist/pdfium.wasm',
-      dest: 'embedpdf',
-    },
-  ];
-
   return {
     base: (process.env.BASE_URL || '/').replace(/\/?$/, '/'),
+    worker: {
+      format: 'es' as const,
+    },
     plugins: [
       // basicSsl(),
       handlebars({
@@ -298,31 +552,32 @@ export default defineConfig(() => {
           brandName: process.env.VITE_BRAND_NAME || '',
           brandLogo: process.env.VITE_BRAND_LOGO || '',
           footerText: process.env.VITE_FOOTER_TEXT || '',
+          appVersion: process.env.npm_package_version || 'Unknown',
         },
       }),
       languageRouterPlugin(),
       flattenPagesPlugin(),
       rewriteHtmlPathsPlugin(),
+      swPrecachePlugin(),
       tailwindcss(),
       nodePolyfills({
         include: ['buffer', 'stream', 'util', 'zlib', 'process'],
         globals: {
           Buffer: true,
-          global: true,
+          global: false,
           process: true,
         },
-      }),
-      viteStaticCopy({
-        targets: staticCopyTargets,
       }),
       viteCompression({
         algorithm: 'brotliCompress',
         ext: '.br',
         threshold: 1024,
+        filter: /\.(js|mjs|json|css|html|wasm|svg)$/i,
         compressionOptions: {
           params: {
             [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-            [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
+            [zlibConstants.BROTLI_PARAM_MODE]:
+              zlibConstants.BROTLI_MODE_GENERIC,
           },
         },
         deleteOriginFile: false,
@@ -331,6 +586,7 @@ export default defineConfig(() => {
         algorithm: 'gzip',
         ext: '.gz',
         threshold: 1024,
+        filter: /\.(js|mjs|json|css|html|wasm|svg)$/i,
         compressionOptions: {
           level: 9,
         },
@@ -339,21 +595,35 @@ export default defineConfig(() => {
     ],
     define: {
       __SIMPLE_MODE__: JSON.stringify(process.env.SIMPLE_MODE === 'true'),
+      __DISABLE_GITHUB_STARS__: JSON.stringify(
+        process.env.DISABLE_GITHUB_STARS === 'true'
+      ),
       __BRAND_NAME__: JSON.stringify(process.env.VITE_BRAND_NAME || ''),
+      __DISABLED_TOOLS__: JSON.stringify(
+        (process.env.DISABLE_TOOLS || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      ),
+      __ENGINE_VERSION__: JSON.stringify(engineVersion()),
     },
     resolve: {
       alias: {
         '@/types': resolve(__dirname, 'src/js/types/index.ts'),
+        '@': resolve(__dirname, 'src'),
         stream: 'stream-browserify',
         zlib: 'browserify-zlib',
       },
     },
     optimizeDeps: {
       include: ['pdfkit', 'blob-stream'],
-      exclude: ['coherentpdf'],
+      exclude: ['coherentpdf', 'wasm-vips', 'bentopdf-pdfium'],
     },
     server: {
-      host: true,
+      host: process.env.VITE_DEV_HOST || 'localhost',
+      watch: {
+        ignored: ['!**/node_modules/bentopdf-pdfium/**'],
+      },
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin',
         'Cross-Origin-Embedder-Policy': 'require-corp',
@@ -378,7 +648,18 @@ export default defineConfig(() => {
           privacy: resolve(__dirname, 'privacy.html'),
           terms: resolve(__dirname, 'terms.html'),
           licensing: resolve(__dirname, 'licensing.html'),
+          kura: resolve(__dirname, 'kura.html'),
+          'hyper-compress': resolve(__dirname, 'hyper-compress.html'),
           tools: resolve(__dirname, 'tools.html'),
+          ...Object.fromEntries(
+            fs
+              .readdirSync(resolve(__dirname, 'blog'))
+              .filter((f) => f.endsWith('.html'))
+              .map((f) => [
+                `blog-${f.replace('.html', '')}`,
+                resolve(__dirname, 'blog', f),
+              ])
+          ),
           '404': resolve(__dirname, '404.html'),
           // Category Hub Pages
           'pdf-converter': resolve(__dirname, 'pdf-converter.html'),
@@ -400,14 +681,44 @@ export default defineConfig(() => {
           'merge-pdf': resolve(__dirname, 'src/pages/merge-pdf.html'),
           'split-pdf': resolve(__dirname, 'src/pages/split-pdf.html'),
           'compress-pdf': resolve(__dirname, 'src/pages/compress-pdf.html'),
+          'compress-pdf-to-100kb': resolve(
+            __dirname,
+            'src/pages/compress-pdf-to-100kb.html'
+          ),
+          'compress-pdf-to-200kb': resolve(
+            __dirname,
+            'src/pages/compress-pdf-to-200kb.html'
+          ),
+          'compress-pdf-to-500kb': resolve(
+            __dirname,
+            'src/pages/compress-pdf-to-500kb.html'
+          ),
+          'compress-pdf-to-1mb': resolve(
+            __dirname,
+            'src/pages/compress-pdf-to-1mb.html'
+          ),
+          'compress-pdf-to-2mb': resolve(
+            __dirname,
+            'src/pages/compress-pdf-to-2mb.html'
+          ),
+          'compress-pdf-for-email': resolve(
+            __dirname,
+            'src/pages/compress-pdf-for-email.html'
+          ),
           'edit-pdf': resolve(__dirname, 'src/pages/edit-pdf.html'),
+          'edit-pdf-text': resolve(__dirname, 'src/pages/edit-pdf-text.html'),
           'jpg-to-pdf': resolve(__dirname, 'src/pages/jpg-to-pdf.html'),
           'sign-pdf': resolve(__dirname, 'src/pages/sign-pdf.html'),
           'crop-pdf': resolve(__dirname, 'src/pages/crop-pdf.html'),
           'extract-pages': resolve(__dirname, 'src/pages/extract-pages.html'),
           'delete-pages': resolve(__dirname, 'src/pages/delete-pages.html'),
           'organize-pdf': resolve(__dirname, 'src/pages/organize-pdf.html'),
+          'overlay-pdf': resolve(__dirname, 'src/pages/overlay-pdf.html'),
           'page-numbers': resolve(__dirname, 'src/pages/page-numbers.html'),
+          'add-page-labels': resolve(
+            __dirname,
+            'src/pages/add-page-labels.html'
+          ),
           'add-watermark': resolve(__dirname, 'src/pages/add-watermark.html'),
           'header-footer': resolve(__dirname, 'src/pages/header-footer.html'),
           'invert-colors': resolve(__dirname, 'src/pages/invert-colors.html'),
@@ -449,6 +760,7 @@ export default defineConfig(() => {
             __dirname,
             'src/pages/alternate-merge.html'
           ),
+          'duplex-collate': resolve(__dirname, 'src/pages/duplex-collate.html'),
           'compare-pdfs': resolve(__dirname, 'src/pages/compare-pdfs.html'),
           'add-attachments': resolve(
             __dirname,
@@ -469,9 +781,9 @@ export default defineConfig(() => {
             __dirname,
             'src/pages/remove-metadata.html'
           ),
-          'decrypt-pdf': resolve(__dirname, 'src/pages/decrypt-pdf.html'),
+          'unlock-pdf': resolve(__dirname, 'src/pages/unlock-pdf.html'),
           'flatten-pdf': resolve(__dirname, 'src/pages/flatten-pdf.html'),
-          'encrypt-pdf': resolve(__dirname, 'src/pages/encrypt-pdf.html'),
+          'protect-pdf': resolve(__dirname, 'src/pages/protect-pdf.html'),
           'linearize-pdf': resolve(__dirname, 'src/pages/linearize-pdf.html'),
           'remove-restrictions': resolve(
             __dirname,
@@ -502,8 +814,9 @@ export default defineConfig(() => {
           'pdf-to-jpg': resolve(__dirname, 'src/pages/pdf-to-jpg.html'),
           'pdf-to-png': resolve(__dirname, 'src/pages/pdf-to-png.html'),
           'pdf-to-tiff': resolve(__dirname, 'src/pages/pdf-to-tiff.html'),
+          'pdf-to-cbz': resolve(__dirname, 'src/pages/pdf-to-cbz.html'),
           'pdf-to-webp': resolve(__dirname, 'src/pages/pdf-to-webp.html'),
-          'pdf-to-docx': resolve(__dirname, 'src/pages/pdf-to-docx.html'),
+          'pdf-to-word': resolve(__dirname, 'src/pages/pdf-to-word.html'),
           'extract-images': resolve(__dirname, 'src/pages/extract-images.html'),
           'pdf-to-markdown': resolve(
             __dirname,
@@ -550,6 +863,7 @@ export default defineConfig(() => {
             __dirname,
             'src/pages/digital-sign-pdf.html'
           ),
+          'timestamp-pdf': resolve(__dirname, 'src/pages/timestamp-pdf.html'),
           'validate-signature-pdf': resolve(
             __dirname,
             'src/pages/validate-signature-pdf.html'
@@ -565,6 +879,15 @@ export default defineConfig(() => {
             __dirname,
             'src/pages/bates-numbering.html'
           ),
+        },
+        output: {
+          assetFileNames: (assetInfo) => {
+            const name = assetInfo.names?.[0] ?? '';
+            if (name.endsWith('.mjs')) {
+              return 'assets/[name]-[hash].js';
+            }
+            return 'assets/[name]-[hash][extname]';
+          },
         },
       },
     },

@@ -7,12 +7,14 @@ import '../../css/bookmark.css';
 import { initializeGlobalShortcuts } from '../utils/shortcuts-init.js';
 import {
   truncateFilename,
-  getPDFDocument,
   formatBytes,
   downloadFile,
   escapeHtml,
   hexToRgb,
 } from '../utils/helpers.js';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
+import { loadPdfDocument } from '../utils/load-pdf-document.js';
+import '../utils/setup-pdf-worker.js';
 import {
   BookmarkNode,
   BookmarkTree,
@@ -31,11 +33,6 @@ import {
   PDF_COLOR_MAP,
 } from '@/types';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
-
 const modalContainer = document.getElementById(
   'modal-container'
 ) as HTMLElement | null;
@@ -44,7 +41,6 @@ let isPickingDestination = false;
 let currentPickingCallback: DestinationCallback | null = null;
 let destinationMarker: HTMLDivElement | null = null;
 let savedModalOverlay: HTMLDivElement | null = null;
-let savedModal: HTMLDivElement | null = null;
 let currentViewport: PageViewport | null = null;
 let currentZoom = 1.0;
 const fileInput = document.getElementById(
@@ -232,22 +228,22 @@ function showInputModal(
         if (field.type === 'text') {
           return `
   <div class="mb-4">
-    <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+    <label class="block text-sm font-medium text-gray-700 mb-2">${escapeHTML(field.label)}</label>
       <input type="text" id="modal-${field.name}" value="${escapeHTML(String(defaultValues[field.name] || ''))}"
 class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900"
-placeholder="${field.placeholder || ''}" />
+placeholder="${escapeHTML(field.placeholder || '')}" />
   </div>
     `;
         } else if (field.type === 'select') {
           return `
   <div class="mb-4">
-    <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+    <label class="block text-sm font-medium text-gray-700 mb-2">${escapeHTML(field.label)}</label>
       <select id="modal-${field.name}" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900">
         ${field.options
           .map(
             (opt) => `
-                                        <option value="${opt.value}" ${defaultValues[field.name] === opt.value ? 'selected' : ''}>
-                                            ${opt.label}
+                                        <option value="${escapeHTML(opt.value)}" ${defaultValues[field.name] === opt.value ? 'selected' : ''}>
+                                            ${escapeHTML(opt.label)}
                                         </option>
                                     `
           )
@@ -261,7 +257,7 @@ placeholder="${field.placeholder || ''}" />
             defaultValues.destX !== null && defaultValues.destX !== undefined;
           return `
   <div class="mb-4">
-    <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+    <label class="block text-sm font-medium text-gray-700 mb-2">${escapeHTML(field.label)}</label>
       <div class="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
         <div class="flex items-center gap-2">
           <label class="flex items-center gap-1 text-xs">
@@ -273,7 +269,7 @@ placeholder="${field.placeholder || ''}" />
                   <div class="grid grid-cols-2 gap-2">
                     <div>
                     <label class="text-xs text-gray-600">Page</label>
-                      <input type="number" id="modal-dest-page" min="1" max="${field.maxPages || 1}" value="${defaultValues.destPage || field.page || 1}"
+                      <input type="number" id="modal-dest-page" min="1" max="${escapeHTML(String(field.maxPages || 1))}" value="${escapeHTML(String(defaultValues.destPage || field.page || 1))}"
 class="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900" step="1" />
   </div>
   <div>
@@ -313,7 +309,7 @@ class="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900" />
         } else if (field.type === 'preview') {
           return `
         <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-700 mb-2">${field.label}</label>
+          <label class="block text-sm font-medium text-gray-700 mb-2">${escapeHTML(field.label)}</label>
             <div id="modal-preview" class="style-preview bg-gray-50">
               <span id="preview-text" style="font-size: 16px;">Preview Text</span>
                 </div>
@@ -326,7 +322,7 @@ class="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900" />
 
     modal.innerHTML = `
                 <div class="p-6">
-                  <h3 class="text-xl font-bold text-gray-800 mb-4">${title}</h3>
+                  <h3 class="text-xl font-bold text-gray-800 mb-4">${escapeHTML(title)}</h3>
                     <div class="mb-6">
                       ${fieldsHTML}
 </div>
@@ -461,7 +457,6 @@ class="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-900" />
     if (pickDestBtn) {
       pickDestBtn.addEventListener('click', () => {
         savedModalOverlay = overlay;
-        savedModal = modal;
         overlay.style.display = 'none';
 
         startDestinationPicking((page: number, pdfX: number, pdfY: number) => {
@@ -697,7 +692,6 @@ function cancelDestinationPicking(): void {
   if (savedModalOverlay) {
     savedModalOverlay.style.display = '';
     savedModalOverlay = null;
-    savedModal = null;
   }
 }
 
@@ -822,6 +816,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function showConfirmModal(message: string): Promise<boolean> {
   return new Promise((resolve) => {
+    const previousActiveEl = document.activeElement as HTMLElement | null;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
 
@@ -831,7 +826,7 @@ function showConfirmModal(message: string): Promise<boolean> {
     modal.innerHTML = `
   <div class="p-6">
     <h3 class="text-xl font-bold text-gray-800 mb-4">Confirm Action</h3>
-      <p class="text-gray-600 mb-6">${message}</p>
+      <p class="text-gray-600 mb-6">${escapeHTML(message)}</p>
         <div class="flex gap-2 justify-end">
           <button id="modal-cancel" class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700">Cancel</button>
             <button id="modal-confirm" class="px-4 py-2 rounded btn-gradient text-white">Confirm</button>
@@ -842,19 +837,30 @@ function showConfirmModal(message: string): Promise<boolean> {
     overlay.appendChild(modal);
     modalContainer?.appendChild(overlay);
 
-    modal.querySelector('#modal-cancel')?.addEventListener('click', () => {
+    const modalCancelBtn = modal.querySelector(
+      '#modal-cancel'
+    ) as HTMLButtonElement | null;
+    const modalConfirmBtn = modal.querySelector(
+      '#modal-confirm'
+    ) as HTMLButtonElement | null;
+    modalCancelBtn?.focus();
+
+    modalCancelBtn?.addEventListener('click', () => {
       modalContainer?.removeChild(overlay);
+      previousActiveEl?.focus();
       resolve(false);
     });
 
-    modal.querySelector('#modal-confirm')?.addEventListener('click', () => {
+    modalConfirmBtn?.addEventListener('click', () => {
       modalContainer?.removeChild(overlay);
+      previousActiveEl?.focus();
       resolve(true);
     });
 
     overlay.addEventListener('click', (e: MouseEvent) => {
       if (e.target === overlay) {
         modalContainer?.removeChild(overlay);
+        previousActiveEl?.focus();
         resolve(false);
       }
     });
@@ -863,6 +869,7 @@ function showConfirmModal(message: string): Promise<boolean> {
 
 function showAlertModal(title: string, message: string): Promise<boolean> {
   return new Promise((resolve) => {
+    const previousActiveEl = document.activeElement as HTMLElement | null;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
 
@@ -871,8 +878,8 @@ function showAlertModal(title: string, message: string): Promise<boolean> {
 
     modal.innerHTML = `
               <div class="p-6">
-                <h3 class="text-xl font-bold text-gray-800 mb-4">${title}</h3>
-                  <p class="text-gray-600 mb-6">${message}</p>
+                <h3 class="text-xl font-bold text-gray-800 mb-4">${escapeHTML(title)}</h3>
+                  <p class="text-gray-600 mb-6">${escapeHTML(message)}</p>
                     <div class="flex justify-end">
                       <button id="modal-ok" class="px-4 py-2 rounded btn-gradient text-white">OK</button>
                         </div>
@@ -882,14 +889,19 @@ function showAlertModal(title: string, message: string): Promise<boolean> {
     overlay.appendChild(modal);
     modalContainer?.appendChild(overlay);
 
-    modal.querySelector('#modal-ok')?.addEventListener('click', () => {
+    const okBtn = modal.querySelector('#modal-ok') as HTMLButtonElement | null;
+    okBtn?.focus();
+
+    okBtn?.addEventListener('click', () => {
       modalContainer?.removeChild(overlay);
+      previousActiveEl?.focus();
       resolve(true);
     });
 
     overlay.addEventListener('click', (e: MouseEvent) => {
       if (e.target === overlay) {
         modalContainer?.removeChild(overlay);
+        previousActiveEl?.focus();
         resolve(true);
       }
     });
@@ -1057,6 +1069,12 @@ document.addEventListener('keydown', (e: KeyboardEvent) => {
       e.preventDefault();
       redo();
     }
+  } else if (e.key === 'PageUp') {
+    e.preventDefault();
+    prevPageBtn?.click();
+  } else if (e.key === 'PageDown') {
+    e.preventDefault();
+    nextPageBtn?.click();
   }
 });
 
@@ -1217,7 +1235,14 @@ async function loadPDF(e?: Event): Promise<void> {
   if (filenameDisplay)
     filenameDisplay.textContent = truncateFilename(file.name);
   renderFileDisplay(file);
-  const arrayBuffer = await file.arrayBuffer();
+
+  loaderModal?.classList.add('hidden');
+  const result = await loadPdfWithPasswordPrompt(file);
+  if (!result) {
+    loaderModal?.classList.add('hidden');
+    return;
+  }
+  loaderModal?.classList.remove('hidden');
 
   currentPage = 1;
   bookmarkTree = [];
@@ -1226,12 +1251,8 @@ async function loadPDF(e?: Event): Promise<void> {
   selectedBookmarks.clear();
   collapsedNodes.clear();
 
-  pdfLibDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-
-  const loadingTask = getPDFDocument({
-    data: new Uint8Array(arrayBuffer),
-  });
-  pdfJsDoc = await loadingTask.promise;
+  pdfLibDoc = await loadPdfDocument(result.bytes, { ignoreEncryption: true });
+  pdfJsDoc = result.pdf;
 
   if (gotoPageInput) gotoPageInput.max = String(pdfJsDoc.numPages);
 
@@ -1288,7 +1309,7 @@ jsonInput?.addEventListener('change', async (e: Event) => {
       'JSON Loaded',
       'Loaded bookmarks from JSON. Now upload your PDF.'
     );
-  } catch (err) {
+  } catch {
     await showAlertModal('Error', 'Invalid JSON format');
   }
 });
@@ -1663,10 +1684,13 @@ function createNodeElement(node: BookmarkNode, level = 0): HTMLLIElement {
 
   const titleDiv = document.createElement('div');
   titleDiv.className = 'flex-1 min-w-0 cursor-pointer';
-  const customColorStyle =
-    node.color && typeof node.color === 'string' && node.color.startsWith('#')
-      ? `style="color: ${node.color}"`
+  const safeCustomColor =
+    typeof node.color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(node.color)
+      ? node.color
       : '';
+  const customColorStyle = safeCustomColor
+    ? `style="color: ${safeCustomColor}"`
+    : '';
   const hasDestination =
     node.destX !== null || node.destY !== null || node.zoom !== null;
   const destinationIcon = hasDestination
@@ -1675,7 +1699,7 @@ function createNodeElement(node: BookmarkNode, level = 0): HTMLLIElement {
 
   titleDiv.innerHTML = `
                 <span class="text-sm block ${styleClass} ${textColorClass}" ${customColorStyle}>${escapeHTML(node.title)}${destinationIcon}</span>
-                <span class="text-xs text-gray-500">Page ${node.page}</span>
+                <span class="text-xs text-gray-500">Page ${escapeHTML(String(node.page))}</span>
             `;
 
   titleDiv.addEventListener('click', async () => {
@@ -1923,7 +1947,14 @@ exportCsvBtn?.addEventListener('click', () => {
   const csv =
     'title,page,level\n' +
     flat
-      .map((b) => `"${b.title.replace(/"/g, '""')}",${b.page},${b.level}`)
+      .map((b) => {
+        const first = b.title.charAt(0);
+        const t =
+          /[=+\-@]/.test(first) || first === '\t' || first === '\r'
+            ? `'${b.title}`
+            : b.title;
+        return `"${t.replace(/"/g, '""')}",${b.page},${b.level}`;
+      })
       .join('\n');
 
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -1979,8 +2010,34 @@ jsonImportHidden?.addEventListener('change', async (e: Event) => {
     const imported = JSON.parse(text) as BookmarkTree;
     function cleanImportedTree(nodes: BookmarkNode[]): void {
       if (!nodes) return;
+      const validStyles = ['bold', 'italic', 'bold-italic'];
       for (const node of nodes) {
         if (node.title) node.title = cleanTitle(node.title);
+        node.page = Number.isFinite(Number(node.page))
+          ? Math.max(1, Math.trunc(Number(node.page)))
+          : 1;
+        if (
+          typeof node.color === 'string' &&
+          node.color.startsWith('#') &&
+          !/^#[0-9a-fA-F]{3,8}$/.test(node.color)
+        ) {
+          node.color = '';
+        }
+        if (!validStyles.includes(node.style as string)) {
+          node.style = null;
+        }
+        node.destX =
+          node.destX != null && Number.isFinite(Number(node.destX))
+            ? Number(node.destX)
+            : null;
+        node.destY =
+          node.destY != null && Number.isFinite(Number(node.destY))
+            ? Number(node.destY)
+            : null;
+        node.zoom =
+          node.zoom != null && /^-?\d*\.?\d+$/.test(String(node.zoom))
+            ? String(node.zoom)
+            : null;
         if (node.children) cleanImportedTree(node.children);
       }
     }
@@ -1989,7 +2046,7 @@ jsonImportHidden?.addEventListener('change', async (e: Event) => {
     saveState();
     renderBookmarkTree();
     await showAlertModal('Success', 'Bookmarks imported from JSON!');
-  } catch (err) {
+  } catch {
     await showAlertModal('Error', 'Invalid JSON format');
   }
 
@@ -2281,7 +2338,7 @@ downloadBtn?.addEventListener('click', async () => {
     const blob = new Blob([new Uint8Array(pdfBytes)], {
       type: 'application/pdf',
     });
-    downloadFile(blob, `${originalFileName}-bookmarked.pdf`);
+    downloadFile(blob, `${originalFileName}.pdf`);
 
     await showAlertModal('Success', 'PDF saved successfully!');
 

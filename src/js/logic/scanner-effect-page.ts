@@ -10,11 +10,9 @@ import { PDFDocument } from 'pdf-lib';
 import { applyScannerEffect } from '../utils/image-effects.js';
 import * as pdfjsLib from 'pdfjs-dist';
 import type { ScanSettings } from '../types/scanner-effect-type.js';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+import { t } from '../i18n/i18n';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
+import '../utils/setup-pdf-worker.js';
 
 let files: File[] = [];
 let cachedBaselineData: ImageData | null = null;
@@ -129,7 +127,7 @@ const updateUI = () => {
 
       const metaSpan = document.createElement('div');
       metaSpan.className = 'text-xs text-gray-400';
-      metaSpan.textContent = `${formatBytes(file.size)} • Loading pages...`;
+      metaSpan.textContent = `${formatBytes(file.size)} • ${t('common.loadingPageCount')}`;
 
       infoContainer.append(nameSpan, metaSpan);
 
@@ -152,7 +150,7 @@ const updateUI = () => {
           return getPDFDocument(buffer).promise;
         })
         .then((pdf: pdfjsLib.PDFDocumentProxy) => {
-          metaSpan.textContent = `${formatBytes(file.size)} • ${pdf.numPages} page${pdf.numPages !== 1 ? 's' : ''}`;
+          metaSpan.textContent = `${formatBytes(file.size)} • ${pdf.numPages} ${pdf.numPages !== 1 ? t('common.pages') : t('common.page')}`;
         })
         .catch(() => {
           metaSpan.textContent = formatBytes(file.size);
@@ -255,7 +253,7 @@ async function processAllPages(): Promise<void> {
     const resultBytes = await newPdfDoc.save();
     downloadFile(
       new Blob([new Uint8Array(resultBytes)], { type: 'application/pdf' }),
-      'scanned.pdf'
+      files[0]?.name || 'document.pdf'
     );
     showAlert(
       'Success',
@@ -401,13 +399,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    files = [validFiles[0]];
-    updateUI();
-
-    showLoader('Loading preview...');
     try {
-      const buffer = await readFileAsArrayBuffer(validFiles[0]);
-      pdfjsDoc = await getPDFDocument({ data: buffer }).promise;
+      const result = await loadPdfWithPasswordPrompt(validFiles[0]);
+      if (!result) return;
+      showLoader('Loading preview...');
+      files = [result.file];
+      updateUI();
+      pdfjsDoc = result.pdf;
       await renderPreview();
     } catch (e) {
       console.error(e);

@@ -5,11 +5,9 @@ import { PDFDocument as PDFLibDocument } from 'pdf-lib';
 import { applyInvertColors } from '../utils/image-effects.js';
 import * as pdfjsLib from 'pdfjs-dist';
 import { InvertColorsState } from '@/types';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString();
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
+import { loadPdfDocument } from '../utils/load-pdf-document.js';
+import '../utils/setup-pdf-worker.js';
 
 const pageState: InvertColorsState = { file: null, pdfDoc: null };
 
@@ -64,11 +62,13 @@ async function handleFiles(files: FileList) {
     showAlert('Invalid File', 'Please upload a valid PDF file.');
     return;
   }
-  showLoader('Loading PDF...');
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    pageState.pdfDoc = await PDFLibDocument.load(arrayBuffer);
-    pageState.file = file;
+    const result = await loadPdfWithPasswordPrompt(file);
+    if (!result) return;
+    showLoader('Loading PDF...');
+    result.pdf.destroy();
+    pageState.pdfDoc = await loadPdfDocument(result.bytes);
+    pageState.file = result.file;
     updateFileDisplay();
     document.getElementById('options-panel')?.classList.remove('hidden');
   } catch (error) {
@@ -160,7 +160,7 @@ async function invertColors() {
     const newPdfBytes = await newPdfDoc.save();
     downloadFile(
       new Blob([new Uint8Array(newPdfBytes)], { type: 'application/pdf' }),
-      'inverted.pdf'
+      pageState.file?.name || 'document.pdf'
     );
     showAlert('Success', 'Colors inverted successfully!', 'success', () => {
       resetState();

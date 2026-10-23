@@ -1,9 +1,16 @@
 import { tesseractLanguages } from '../config/tesseract-languages.js';
 import { showAlert } from '../ui.js';
 import { downloadFile, formatBytes } from '../utils/helpers.js';
+import { loadPdfWithPasswordPrompt } from '../utils/password-prompt.js';
 import { icons, createIcons } from 'lucide';
 import { OcrState } from '@/types';
 import { performOcr } from '../utils/ocr.js';
+import {
+  getAvailableTesseractLanguageEntries,
+  resolveConfiguredTesseractAvailableLanguages,
+  UnsupportedOcrLanguageError,
+} from '../utils/tesseract-language-availability.js';
+import { initI18n, t } from '../i18n/index.js';
 
 const pageState: OcrState = {
   file: null,
@@ -31,7 +38,7 @@ function updateProgress(status: string, progress: number) {
   progressStatus.textContent = status;
   progressBar.style.width = `${Math.min(100, progress * 100)}%`;
 
-  const logMessage = `Status: ${status}`;
+  const logMessage = t('tools:ocrPdf.statusPrefix', { status });
   progressLog.textContent += logMessage + '\n';
   progressLog.scrollTop = progressLog.scrollHeight;
 }
@@ -72,12 +79,39 @@ function resetState() {
   const selectedLangsDisplay = document.getElementById(
     'selected-langs-display'
   );
-  if (selectedLangsDisplay) selectedLangsDisplay.textContent = 'None';
+  if (selectedLangsDisplay) {
+    selectedLangsDisplay.textContent = t('tools:ocrPdf.none');
+  }
 
   const processBtn = document.getElementById(
     'process-btn'
   ) as HTMLButtonElement;
   if (processBtn) processBtn.disabled = true;
+}
+
+function updateLanguageAvailabilityNotice() {
+  const notice = document.getElementById('lang-availability-note');
+  if (!notice) return;
+
+  const configuredLanguages = resolveConfiguredTesseractAvailableLanguages();
+  if (!configuredLanguages) {
+    notice.classList.add('hidden');
+    notice.textContent = '';
+    return;
+  }
+
+  const availableEntries = getAvailableTesseractLanguageEntries();
+  if (availableEntries.length === 0) {
+    notice.classList.remove('hidden');
+    notice.textContent = t('tools:ocrPdf.availabilityInvalidConfig');
+    return;
+  }
+
+  const availableNames = availableEntries.map(([, name]) => name).join(', ');
+  notice.classList.remove('hidden');
+  notice.textContent = t('tools:ocrPdf.availabilityBundles', {
+    languages: availableNames,
+  });
 }
 
 async function runOCR() {
@@ -92,20 +126,23 @@ async function runOCR() {
   );
   const binarize = (document.getElementById('ocr-binarize') as HTMLInputElement)
     .checked;
+  const embedFullFonts = (
+    document.getElementById('ocr-embed-full-fonts') as HTMLInputElement
+  ).checked;
   const whitelist = (
     document.getElementById('ocr-whitelist') as HTMLInputElement
   ).value;
 
   if (selectedLangs.length === 0) {
     showAlert(
-      'No Languages Selected',
-      'Please select at least one language for OCR.'
+      t('tools:ocrPdf.noLanguagesTitle'),
+      t('tools:ocrPdf.noLanguagesMessage')
     );
     return;
   }
 
   if (!pageState.file) {
-    showAlert('No File', 'Please upload a PDF file first.');
+    showAlert(t('tools:ocrPdf.noFileTitle'), t('tools:ocrPdf.noFileMessage'));
     return;
   }
 
@@ -125,6 +162,7 @@ async function runOCR() {
       resolution: scale,
       binarize,
       whitelist,
+      embedFullFonts,
       onProgress: updateProgress,
     });
 
@@ -142,10 +180,14 @@ async function runOCR() {
     if (textOutput) textOutput.value = result.fullText.trim();
   } catch (e) {
     console.error(e);
-    showAlert(
-      'OCR Error',
-      'An error occurred during the OCR process. The worker may have failed to load. Please try again.'
-    );
+    if (e instanceof UnsupportedOcrLanguageError) {
+      showAlert(t('tools:ocrPdf.languageUnavailableTitle'), e.message);
+    } else {
+      showAlert(
+        t('tools:ocrPdf.ocrErrorTitle'),
+        t('tools:ocrPdf.ocrErrorMessage')
+      );
+    }
     if (toolOptions) toolOptions.classList.remove('hidden');
     if (ocrProgress) ocrProgress.classList.add('hidden');
   }
@@ -194,14 +236,17 @@ async function updateUI() {
   }
 }
 
-function handleFileSelect(files: FileList | null) {
+async function handleFileSelect(files: FileList | null) {
   if (files && files.length > 0) {
     const file = files[0];
     if (
       file.type === 'application/pdf' ||
       file.name.toLowerCase().endsWith('.pdf')
     ) {
-      pageState.file = file;
+      const result = await loadPdfWithPasswordPrompt(file);
+      if (!result) return;
+      result.pdf.destroy();
+      pageState.file = result.file;
       updateUI();
     }
   }
@@ -213,10 +258,20 @@ function populateLanguageList() {
 
   langList.innerHTML = '';
 
-  Object.entries(tesseractLanguages).forEach(function ([code, name]) {
+  const availableEntries = getAvailableTesseractLanguageEntries();
+  if (availableEntries.length === 0) {
+    const emptyState = document.createElement('p');
+    emptyState.className = 'text-sm text-yellow-300 p-2';
+    emptyState.textContent = t('tools:ocrPdf.noLanguagesAvailable');
+    langList.appendChild(emptyState);
+    return;
+  }
+
+  availableEntries.forEach(function ([code, name]) {
     const label = document.createElement('label');
     label.className =
       'flex items-center gap-2 p-2 rounded-md hover:bg-gray-700 cursor-pointer';
+    label.dataset.search = `${name} ${code}`.toLowerCase();
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
@@ -230,7 +285,7 @@ function populateLanguageList() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
   const dropZone = document.getElementById('drop-zone');
   const processBtn = document.getElementById(
@@ -252,7 +307,9 @@ document.addEventListener('DOMContentLoaded', function () {
   const downloadTxtBtn = document.getElementById('download-txt-btn');
   const downloadPdfBtn = document.getElementById('download-searchable-pdf');
 
+  await initI18n();
   populateLanguageList();
+  updateLanguageAvailabilityNotice();
 
   if (backBtn) {
     backBtn.addEventListener('click', function () {
@@ -304,9 +361,9 @@ document.addEventListener('DOMContentLoaded', function () {
     langSearch.addEventListener('input', function () {
       const searchTerm = langSearch.value.toLowerCase();
       langList.querySelectorAll('label').forEach(function (label) {
-        (label as HTMLElement).style.display = label.textContent
-          ?.toLowerCase()
-          .includes(searchTerm)
+        (label as HTMLElement).style.display = (
+          label as HTMLElement
+        ).dataset.search?.includes(searchTerm)
           ? ''
           : 'none';
       });
@@ -323,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       if (selectedLangsDisplay) {
         selectedLangsDisplay.textContent =
-          selected.length > 0 ? selected.join(', ') : 'None';
+          selected.length > 0 ? selected.join(', ') : t('tools:ocrPdf.none');
       }
 
       if (processBtn) {
@@ -408,7 +465,7 @@ document.addEventListener('DOMContentLoaded', function () {
           new Blob([new Uint8Array(pageState.searchablePdfBytes)], {
             type: 'application/pdf',
           }),
-          'searchable.pdf'
+          pageState.file?.name || 'document.pdf'
         );
       }
     });

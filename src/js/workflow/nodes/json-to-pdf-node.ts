@@ -2,8 +2,9 @@ import { ClassicPreset } from 'rete';
 import { BaseWorkflowNode } from './base-node';
 import { pdfSocket } from '../sockets';
 import type { PDFData, SocketData, MultiPDFData } from '../types';
-import { PDFDocument } from 'pdf-lib';
 import { loadPyMuPDF } from '../../utils/pymupdf-loader.js';
+import { loadPdfDocument } from '../../utils/load-pdf-document.js';
+import { wfError } from '../errors';
 
 export class JsonToPdfNode extends BaseWorkflowNode {
   readonly category = 'Input' as const;
@@ -46,8 +47,7 @@ export class JsonToPdfNode extends BaseWorkflowNode {
   async data(
     _inputs: Record<string, SocketData[]>
   ): Promise<Record<string, SocketData>> {
-    if (this.files.length === 0)
-      throw new Error('No JSON files uploaded in JSON Input node');
+    if (this.files.length === 0) throw new Error(wfError('noJsonUploaded'));
 
     const pymupdf = await loadPyMuPDF();
     const results: PDFData[] = [];
@@ -65,7 +65,7 @@ export class JsonToPdfNode extends BaseWorkflowNode {
         pageSize: 'a4',
       });
       const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
-      const pdfDoc = await PDFDocument.load(bytes);
+      const pdfDoc = await loadPdfDocument(bytes);
       results.push({
         type: 'pdf',
         document: pdfDoc,

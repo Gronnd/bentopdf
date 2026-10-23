@@ -1,4 +1,5 @@
 import { showLoader, hideLoader, showAlert } from '../ui.js';
+import { t } from '../i18n/i18n';
 import {
   downloadFile,
   readFileAsArrayBuffer,
@@ -7,9 +8,9 @@ import {
 } from '../utils/helpers.js';
 import { state } from '../state.js';
 import { createIcons, icons } from 'lucide';
-import { isWasmAvailable, getWasmBaseUrl } from '../config/wasm-cdn-config.js';
-import { showWasmRequiredDialog } from '../utils/wasm-provider.js';
-import { loadPyMuPDF, isPyMuPDFAvailable } from '../utils/pymupdf-loader.js';
+import { loadPyMuPDF } from '../utils/pymupdf-loader.js';
+import { batchDecryptIfNeeded } from '../utils/password-prompt.js';
+import { deduplicateFileName } from '../utils/deduplicate-filename.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
@@ -53,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const metaSpan = document.createElement('div');
         metaSpan.className = 'text-xs text-gray-400';
-        metaSpan.textContent = `${formatBytes(file.size)} • Loading pages...`;
+        metaSpan.textContent = `${formatBytes(file.size)} • ${t('common.loadingPageCount')}`;
 
         infoContainer.append(nameSpan, metaSpan);
 
@@ -73,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const arrayBuffer = await readFileAsArrayBuffer(file);
           const pdfDoc = await getPDFDocument({ data: arrayBuffer }).promise;
           metaSpan.textContent = `${formatBytes(file.size)} • ${pdfDoc.numPages} pages`;
-        } catch (error) {
+        } catch {
           metaSpan.textContent = `${formatBytes(file.size)} • Could not load page count`;
         }
       }
@@ -108,6 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const includeImages = includeImagesCheckbox?.checked ?? false;
 
+      hideLoader();
+      state.files = await batchDecryptIfNeeded(state.files);
+      showLoader('Converting...');
+
       if (state.files.length === 1) {
         const file = state.files[0];
         showLoader(`Converting ${file.name}...`);
@@ -126,9 +131,9 @@ document.addEventListener('DOMContentLoaded', () => {
           () => resetState()
         );
       } else {
-        showLoader('Converting multiple PDFs...');
         const JSZip = (await import('jszip')).default;
         const zip = new JSZip();
+        const usedNames = new Set<string>();
 
         for (let i = 0; i < state.files.length; i++) {
           const file = state.files[i];
@@ -138,7 +143,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const markdown = await pymupdf.pdfToMarkdown(file, { includeImages });
           const baseName = file.name.replace(/\.pdf$/i, '');
-          zip.file(`${baseName}.md`, markdown);
+          const zipEntryName = deduplicateFileName(`${baseName}.md`, usedNames);
+          zip.file(zipEntryName, markdown);
         }
 
         showLoader('Creating ZIP archive...');
@@ -154,11 +160,11 @@ document.addEventListener('DOMContentLoaded', () => {
           () => resetState()
         );
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       hideLoader();
       showAlert(
         'Error',
-        `An error occurred during conversion. Error: ${e.message}`
+        `An error occurred during conversion. Error: ${e instanceof Error ? e.message : String(e)}`
       );
     }
   };

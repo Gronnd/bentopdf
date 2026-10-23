@@ -2,8 +2,9 @@ import { ClassicPreset } from 'rete';
 import { BaseWorkflowNode } from './base-node';
 import { pdfSocket } from '../sockets';
 import type { PDFData, SocketData, MultiPDFData } from '../types';
-import { PDFDocument } from 'pdf-lib';
 import { getLibreOfficeConverter } from '../../utils/libreoffice-loader.js';
+import { loadPdfDocument } from '../../utils/load-pdf-document.js';
+import { wfError } from '../errors';
 
 export class WordToPdfNode extends BaseWorkflowNode {
   readonly category = 'Input' as const;
@@ -52,8 +53,7 @@ export class WordToPdfNode extends BaseWorkflowNode {
   async data(
     _inputs: Record<string, SocketData[]>
   ): Promise<Record<string, SocketData>> {
-    if (this.files.length === 0)
-      throw new Error('No documents uploaded in Word Input node');
+    if (this.files.length === 0) throw new Error(wfError('noWordDocsUploaded'));
 
     const converter = getLibreOfficeConverter();
     await converter.initialize();
@@ -62,7 +62,7 @@ export class WordToPdfNode extends BaseWorkflowNode {
     for (const file of this.files) {
       const resultBlob = await converter.convertToPdf(file);
       const bytes = new Uint8Array(await resultBlob.arrayBuffer());
-      const document = await PDFDocument.load(bytes);
+      const document = await loadPdfDocument(bytes);
       results.push({
         type: 'pdf',
         document,
